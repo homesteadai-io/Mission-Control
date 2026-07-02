@@ -50,6 +50,7 @@ const toolGroups = [
 export function App() {
   const [mode, setMode] = useState<CockpitMode>("display");
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
+  const [degradedReason, setDegradedReason] = useState<string | undefined>();
   const [selectedId, setSelectedId] = useState(seedArtifacts[0].id);
   const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
   const [voiceSnapshot, setVoiceSnapshot] = useState<MissionVoiceSnapshot>({
@@ -72,7 +73,10 @@ export function App() {
     }
 
     voiceKernelRef.current ??= new MissionVoiceKernel(window.missionControl, {
-      onAvatarState: setAvatarState,
+      onAvatarState: (state, reason) => {
+        setAvatarState(state);
+        setDegradedReason(reason);
+      },
       onTranscript: (line) => setTranscriptLines((current) => [...current, line].slice(-80)),
       onSnapshot: setVoiceSnapshot
     });
@@ -135,14 +139,17 @@ export function App() {
           <MonitorDot size={20} />
           <span>Homestead Mission Control</span>
         </div>
-        <Avatar state={avatarState} />
+        <Avatar state={avatarState} degradedReason={degradedReason} />
         <Transcript state={avatarState} lines={transcriptLines} />
         <div className="state-controls" aria-label="Avatar state controls">
           {(["idle", "listening", "thinking", "speaking", "aging", "degraded"] as AvatarState[]).map((state) => (
             <button
               key={state}
               className={avatarState === state ? "is-active" : ""}
-              onClick={() => setAvatarState(state)}
+              onClick={() => {
+                setAvatarState(state);
+                setDegradedReason(undefined);
+              }}
             >
               {state}
             </button>

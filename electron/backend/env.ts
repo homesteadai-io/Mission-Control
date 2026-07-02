@@ -1,23 +1,24 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const ENV_FILE = ".env.local";
+const ENV_FILES = [".env.local", ".env"];
 
 export function readOpenAiApiKey(projectRoot: string) {
-  const envPath = path.join(projectRoot, ENV_FILE);
-  if (!fs.existsSync(envPath)) {
-    throw new Error(`${ENV_FILE} is missing OPENAI_API_KEY`);
+  const fromProcessEnv = process.env.OPENAI_API_KEY?.trim();
+  if (fromProcessEnv) return fromProcessEnv;
+
+  for (const fileName of ENV_FILES) {
+    const envPath = path.join(projectRoot, fileName);
+    if (!fs.existsSync(envPath)) continue;
+
+    const envText = fs.readFileSync(envPath, "utf8");
+    const apiKey = parseEnv(envText).OPENAI_API_KEY?.trim();
+    if (apiKey) return apiKey;
   }
 
-  const envText = fs.readFileSync(envPath, "utf8");
-  const parsed = parseEnv(envText);
-  const apiKey = parsed.OPENAI_API_KEY?.trim();
-
-  if (!apiKey) {
-    throw new Error(`${ENV_FILE} is missing OPENAI_API_KEY`);
-  }
-
-  return apiKey;
+  throw new Error(
+    `OPENAI_API_KEY not found in process.env, ${ENV_FILES.join(", ")} under ${projectRoot}`
+  );
 }
 
 export function parseEnv(envText: string) {

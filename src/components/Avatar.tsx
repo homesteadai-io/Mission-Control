@@ -3,15 +3,16 @@ import type { AvatarState } from "../types";
 interface AvatarProps {
   state: AvatarState;
   compact?: boolean;
+  degradedReason?: string;
 }
 
-export function Avatar({ state, compact = false }: AvatarProps) {
+export function Avatar({ state, compact = false, degradedReason }: AvatarProps) {
   return (
     <div className={`avatar-frame avatar-${state} ${compact ? "avatar-compact" : ""}`}>
       <div className="avatar-status">
         <div className="mic-glyph" aria-hidden="true" />
         <Waveform />
-        {!compact ? <span>{labelForState(state)}</span> : null}
+        {!compact ? <span>{labelForState(state, degradedReason)}</span> : null}
       </div>
       <img src="./assets/avatar/face.png" alt="Brush-stroke Mission Control avatar" />
     </div>
@@ -28,7 +29,7 @@ function Waveform() {
   );
 }
 
-function labelForState(state: AvatarState) {
+function labelForState(state: AvatarState, degradedReason?: string) {
   switch (state) {
     case "idle":
       return "Idle";
@@ -41,6 +42,6 @@ function labelForState(state: AvatarState) {
     case "aging":
       return "Session aging";
     case "degraded":
-      return "Door unreachable: /api/agent/boot";
+      return degradedReason ?? "Connection issue.";
   }
 }

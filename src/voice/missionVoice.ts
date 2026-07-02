@@ -29,7 +29,7 @@ export interface MissionVoiceSnapshot {
 }
 
 interface MissionVoiceCallbacks {
-  onAvatarState: (state: AvatarState) => void;
+  onAvatarState: (state: AvatarState, reason?: string) => void;
   onTranscript: (line: TranscriptLine) => void;
   onSnapshot: (snapshot: MissionVoiceSnapshot) => void;
 }
@@ -120,11 +120,10 @@ export class MissionVoiceKernel {
       this.#appendSystemLine("Realtime voice session connected.");
       this.#callbacks.onAvatarState(this.#alwaysListening ? "listening" : "idle");
     } catch (error) {
-      this.#callbacks.onAvatarState("degraded");
-      this.#appendSystemLine(error instanceof Error ? error.message : "Voice connection failed.");
-      await this.#logEvent("voice.connect_failed", {
-        message: error instanceof Error ? error.message : "Unknown voice connection error"
-      });
+      const message = error instanceof Error ? error.message : "Voice connection failed.";
+      this.#callbacks.onAvatarState("degraded", message);
+      this.#appendSystemLine(message);
+      await this.#logEvent("voice.connect_failed", { message });
     } finally {
       this.#connecting = false;
       this.#emitSnapshot();
@@ -198,9 +197,10 @@ export class MissionVoiceKernel {
     });
 
     session.on("error", (error) => {
-      this.#callbacks.onAvatarState("degraded");
-      this.#appendSystemLine("Realtime session error.");
-      void this.#logEvent("voice.session_error", { message: stringifyError(error.error) });
+      const message = stringifyError(error.error);
+      this.#callbacks.onAvatarState("degraded", `Realtime session error: ${message}`);
+      this.#appendSystemLine(`Realtime session error: ${message}`);
+      void this.#logEvent("voice.session_error", { message });
     });
   }
 
