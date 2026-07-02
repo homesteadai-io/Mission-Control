@@ -7,6 +7,7 @@ import {
 import type { AvatarState, TranscriptEntry } from "../types";
 import type { MissionControlApi } from "../missionControlApi";
 import { decideTranscriptAppend } from "./transcriptDedup";
+import { transitionAudioSession } from "./bargeIn";
 
 export const REALTIME_MODEL = "gpt-realtime-2";
 export const SESSION_RENEWAL_MS = 50 * 60 * 1000;
@@ -43,6 +44,7 @@ export class MissionVoiceKernel {
   #pushToTalkActive = false;
   #connecting = false;
   #aging = false;
+  #speaking = false;
   #renewalTimer: number | undefined;
   #seenTranscriptKeys = new Set<string>();
   #systemInjectedTexts = new Set<string>();
@@ -116,7 +118,7 @@ export class MissionVoiceKernel {
       this.#session = session;
       this.#applyMuteState();
       this.#startRenewalTimer();
-      await this.#logEvent("voice.connected", { model: REALTIME_MODEL, bargeIn: "sdk_audio_interrupted" });
+      await this.#logEvent("voice.connected", { model: REALTIME_MODEL, bargeIn: "audio_start_overlap" });
       this.#appendSystemLine("Realtime voice session connected.");
       this.#callbacks.onAvatarState(this.#alwaysListening ? "listening" : "idle");
     } catch (error) {
@@ -134,6 +136,7 @@ export class MissionVoiceKernel {
     this.#clearRenewalTimer();
     this.#session?.close();
     this.#session = null;
+    this.#speaking = false;
     await this.#logEvent("voice.disconnected");
     this.#callbacks.onAvatarState("idle");
     this.#emitSnapshot();
@@ -176,16 +179,18 @@ export class MissionVoiceKernel {
 
   #attachSessionEvents(session: RealtimeSession) {
     session.on("audio_start", () => {
+      const transition = transitionAudioSession(this.#speaking, "audio_start");
+      this.#speaking = transition.speaking;
+      if (transition.bargeIn) {
+        this.#callbacks.onAvatarState("listening");
+        void this.#logEvent("voice.barge_in_detected", { source: "audio_start_overlap" });
+      }
       this.#callbacks.onAvatarState("speaking");
     });
 
     session.on("audio_stopped", () => {
+      this.#speaking = transitionAudioSession(this.#speaking, "audio_stopped").speaking;
       this.#callbacks.onAvatarState(this.#alwaysListening ? "listening" : "idle");
-    });
-
-    session.on("audio_interrupted", () => {
-      this.#callbacks.onAvatarState("listening");
-      void this.#logEvent("voice.barge_in_detected", { source: "RealtimeSession.audio_interrupted" });
     });
 
     session.on("transport_event", (event) => {
