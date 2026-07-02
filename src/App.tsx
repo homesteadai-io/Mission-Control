@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, MonitorDot, PanelRightOpen, Radio, Settings, Shrink, Volume2 } from "lucide-react";
 import { seedArtifacts } from "./artifacts/seedArtifacts";
+import { ArtifactErrorBoundary } from "./components/ArtifactErrorBoundary";
 import { ArtifactPanel } from "./components/ArtifactPanel";
 import { Avatar } from "./components/Avatar";
 import { MenuOverlay } from "./components/MenuOverlay";
@@ -8,10 +9,30 @@ import { Transcript } from "./components/Transcript";
 import type { AvatarState, CockpitMode } from "./types";
 
 const toolGroups = [
-  { group: "Artifacts", tools: ["render_markdown_artifact", "render_mermaid_artifact", "render_table_artifact"] },
-  { group: "Keep", tools: ["keep_boot", "keep_search"] },
-  { group: "Hands", tools: ["dispatch_to_codex"] },
-  { group: "Desktop", tools: ["enter_computer_mode", "exit_computer_mode", "computer_action"] }
+  {
+    group: "Artifacts",
+    tools: [
+      { name: "render_markdown_artifact", status: "active" },
+      { name: "render_mermaid_artifact", status: "active" },
+      { name: "render_table_artifact", status: "active" }
+    ]
+  },
+  {
+    group: "Keep",
+    tools: [
+      { name: "keep_boot", status: "planned" },
+      { name: "keep_search", status: "planned" }
+    ]
+  },
+  { group: "Hands", tools: [{ name: "dispatch_to_codex", status: "planned" }] },
+  {
+    group: "Desktop",
+    tools: [
+      { name: "enter_computer_mode", status: "active" },
+      { name: "exit_computer_mode", status: "active" },
+      { name: "computer_action", status: "stub" }
+    ]
+  }
 ];
 
 export function App() {
@@ -100,7 +121,9 @@ export function App() {
               </button>
             ))}
           </nav>
-          <ArtifactPanel artifact={selectedArtifact} />
+          <ArtifactErrorBoundary resetKey={selectedArtifact.id}>
+            <ArtifactPanel artifact={selectedArtifact} />
+          </ArtifactErrorBoundary>
         </div>
       </section>
 

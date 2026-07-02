@@ -47,8 +47,8 @@ export const seedArtifacts: ArtifactRecord[] = [
     type: "image-grid",
     title: "Avatar References",
     content: JSON.stringify([
-      { src: "/assets/avatar/face.png", label: "Brush face" },
-      { src: "/assets/avatar/screen-reference.jpg", label: "Listening monitor" }
+      { src: "./assets/avatar/face.png", label: "Brush face" },
+      { src: "./assets/avatar/screen-reference.jpg", label: "Listening monitor" }
     ]),
     createdAt: now,
     source: "seed"

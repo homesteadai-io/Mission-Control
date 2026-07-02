@@ -1,11 +1,34 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell, session } from "electron";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: file:",
+  "font-src 'self'",
+  "connect-src 'self' http://127.0.0.1:5173 ws://127.0.0.1:5173",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'"
+].join("; ");
+
+function installSecurityGuards() {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [contentSecurityPolicy]
+      }
+    });
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -20,6 +43,21 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
+    }
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://")) {
+      void shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+    const allowedUrl = devServerUrl ?? pathToFileURL(path.join(__dirname, "../dist/index.html")).toString();
+    if (url !== allowedUrl) {
+      event.preventDefault();
     }
   });
 
@@ -52,7 +90,10 @@ ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   return { ok: true, mode };
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  installSecurityGuards();
+  createWindow();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

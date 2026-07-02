@@ -344,12 +344,20 @@ button.is-active {
   color: #ffd9a3;
 }
 
-.repair-fallback pre {
+.repair-fallback pre,
+.artifact-parse-failure pre {
   overflow: auto;
   padding: 16px;
   border: 1px solid rgba(255, 217, 163, 0.24);
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.28);
+}
+
+.artifact-parse-failure {
+  display: grid;
+  max-width: 760px;
+  gap: 10px;
+  color: #ffd9a3;
 }
 
 .table-wrap {
@@ -479,9 +487,23 @@ td {
 }
 
 .tool-group button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 42px;
   padding: 0 12px;
   text-align: left;
+}
+
+.tool-group button:disabled {
+  cursor: default;
+  opacity: 0.68;
+}
+
+.tool-group small {
+  color: #8fb2c7;
+  font-size: 11px;
 }
 
 .orb-shell {

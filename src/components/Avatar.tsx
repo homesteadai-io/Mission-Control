@@ -13,7 +13,7 @@ export function Avatar({ state, compact = false }: AvatarProps) {
         <Waveform />
         {!compact ? <span>{labelForState(state)}</span> : null}
       </div>
-      <img src="/assets/avatar/face.png" alt="Brush-stroke Mission Control avatar" />
+      <img src="./assets/avatar/face.png" alt="Brush-stroke Mission Control avatar" />
     </div>
   );
 }

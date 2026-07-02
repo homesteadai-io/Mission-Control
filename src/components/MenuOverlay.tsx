@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 
 interface MenuOverlayProps {
-  groups: Array<{ group: string; tools: string[] }>;
+  groups: Array<{ group: string; tools: Array<{ name: string; status: string }> }>;
   onClose: () => void;
 }
 
@@ -11,8 +11,8 @@ export function MenuOverlay({ groups, onClose }: MenuOverlayProps) {
       <section className="menu-panel">
         <header>
           <div>
-            <p>Registered Tools</p>
-            <h2>Phase 1 menu surface</h2>
+            <p>Tool Surfaces</p>
+            <h2>Active and planned routes</h2>
           </div>
           <button onClick={onClose} aria-label="Close menu">
             <X size={18} />
@@ -23,7 +23,10 @@ export function MenuOverlay({ groups, onClose }: MenuOverlayProps) {
             <div className="tool-group" key={group.group}>
               <h3>{group.group}</h3>
               {group.tools.map((tool) => (
-                <button key={tool}>{tool}</button>
+                <button key={tool.name} disabled={tool.status !== "active"} aria-disabled={tool.status !== "active"}>
+                  <span>{tool.name}</span>
+                  <small>{tool.status}</small>
+                </button>
               ))}
             </div>
           ))}
