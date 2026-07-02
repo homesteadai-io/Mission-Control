@@ -105,6 +105,10 @@ button.is-active {
   filter: sepia(70%) saturate(120%) hue-rotate(345deg) brightness(0.98);
 }
 
+.avatar-aging img {
+  filter: brightness(1.45) contrast(1.1) sepia(34%) saturate(142%) hue-rotate(350deg);
+}
+
 .avatar-status {
   position: absolute;
   left: 22px;
@@ -161,7 +165,7 @@ button.is-active {
 
 .state-controls {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -184,6 +188,32 @@ button.is-active {
 .transcript span {
   color: #d8ecf8;
   font-size: 15px;
+}
+
+.transcript ol {
+  display: grid;
+  max-height: 190px;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.transcript li {
+  display: grid;
+  gap: 4px;
+}
+
+.transcript b {
+  color: #8fcdf8;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.transcript-system span {
+  color: #ffd9a3;
 }
 
 .artifact-workspace {
@@ -226,6 +256,11 @@ button.is-active {
   gap: 8px;
   padding: 0 13px;
   white-space: nowrap;
+}
+
+.bottom-bar button:disabled {
+  cursor: default;
+  opacity: 0.52;
 }
 
 .workspace-grid {

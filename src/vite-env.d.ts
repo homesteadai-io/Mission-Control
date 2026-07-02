@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
 
-interface Window {
-  missionControl?: {
-    setWindowMode: (mode: "display" | "computer") => Promise<{ ok: boolean; mode?: string }>;
-  };
+import type { MissionControlApi } from "./missionControlApi";
+
+declare global {
+  interface Window {
+    missionControl?: MissionControlApi;
+  }
 }

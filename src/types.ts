@@ -1,5 +1,5 @@
 export type CockpitMode = "display" | "computer" | "menu";
-export type AvatarState = "idle" | "listening" | "thinking" | "speaking" | "degraded";
+export type AvatarState = "idle" | "listening" | "thinking" | "speaking" | "aging" | "degraded";
 
 export type ArtifactType = "markdown" | "mermaid" | "table" | "image-grid";
 
@@ -10,4 +10,13 @@ export interface ArtifactRecord {
   content: string;
   createdAt: string;
   source: "seed" | "voice" | "tool";
+}
+
+export interface TranscriptEntry {
+  role: "user" | "assistant" | "system";
+  text: string;
+  source: "history" | "event" | "renewal" | "manual";
+  itemId?: string;
+  eventType?: string;
+  isFinal?: boolean;
 }
