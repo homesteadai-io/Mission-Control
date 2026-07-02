@@ -10,6 +10,7 @@ export interface VoiceSessionCreateResult {
   clientSecret?: string;
   expiresAt?: number;
   model?: "gpt-realtime-2";
+  instructions?: string;
   error?: string;
 }
 

@@ -45,7 +45,7 @@ function withTimestamp<T extends object>(entry: T) {
   };
 }
 
-function assertSafeSessionId(sessionId: string) {
+export function assertSafeSessionId(sessionId: string) {
   if (!/^[a-zA-Z0-9_-]{8,80}$/.test(sessionId)) {
     throw new Error("Invalid transcript session id");
   }

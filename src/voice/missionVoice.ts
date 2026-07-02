@@ -6,11 +6,12 @@ import {
 } from "@openai/agents/realtime";
 import type { AvatarState, TranscriptEntry } from "../types";
 import type { MissionControlApi } from "../missionControlApi";
+import { decideTranscriptAppend } from "./transcriptDedup";
 
 export const REALTIME_MODEL = "gpt-realtime-2";
 export const SESSION_RENEWAL_MS = 50 * 60 * 1000;
-export const MISSION_CONTROL_INSTRUCTIONS =
-  "You are Mission Control, the voice cockpit for Homestead, a private AI operating system. Be concise and operational. Render anything visual or longer than two sentences as an artifact instead of reading it aloud. Announce tool use in a few words while executing. Never claim an action succeeded without the tool result.";
+const RENEWAL_NUDGE =
+  "System note: this realtime session is aging. Verbally offer to reconnect now in one concise sentence.";
 
 export interface TranscriptLine extends TranscriptEntry {
   id: string;
@@ -44,6 +45,7 @@ export class MissionVoiceKernel {
   #aging = false;
   #renewalTimer: number | undefined;
   #seenTranscriptKeys = new Set<string>();
+  #systemInjectedTexts = new Set<string>();
   #lines: TranscriptLine[] = [];
 
   constructor(api: MissionControlApi, callbacks: MissionVoiceCallbacks) {
@@ -62,12 +64,12 @@ export class MissionVoiceKernel {
 
     try {
       const minted = await this.#api.voice.createSession({ stateSummary });
-      if (!minted.ok || !minted.clientSecret || !minted.sessionId) {
+      if (!minted.ok || !minted.clientSecret || !minted.sessionId || !minted.instructions) {
         throw new Error(minted.error ?? "Could not create a realtime voice session");
       }
 
       this.#sessionId = minted.sessionId;
-      const instructions = buildInstructions(stateSummary);
+      const instructions = minted.instructions;
       const agent = new RealtimeAgent({
         name: "Mission Control",
         instructions
@@ -233,14 +235,16 @@ export class MissionVoiceKernel {
   #syncHistoryTranscripts(history: RealtimeItem[]) {
     for (const item of history) {
       if (item.type !== "message" || item.role === "system") continue;
+      if (item.status !== "completed") continue;
 
       for (const content of item.content) {
         const text = extractText(content);
         if (!text) continue;
+        const systemInjected = item.role === "user" && this.#systemInjectedTexts.has(text.trim());
         this.#appendTranscript({
-          role: item.role,
+          role: systemInjected ? "system" : item.role,
           text,
-          source: "history",
+          source: systemInjected ? "renewal" : "history",
           itemId: item.itemId,
           isFinal: item.status === "completed"
         });
@@ -259,11 +263,9 @@ export class MissionVoiceKernel {
 
   #appendTranscript(entry: TranscriptEntry) {
     if (!this.#sessionId) return;
-    const normalizedText = entry.text.trim();
-    if (!normalizedText) return;
-
-    const key = `${entry.role}:${entry.itemId ?? entry.eventType ?? entry.source}:${normalizedText}`;
-    if (this.#seenTranscriptKeys.has(key)) return;
+    const decision = decideTranscriptAppend(this.#seenTranscriptKeys, entry);
+    if (!decision.append) return;
+    const { key, normalizedText } = decision;
     this.#seenTranscriptKeys.add(key);
 
     const line = {
@@ -289,9 +291,8 @@ export class MissionVoiceKernel {
         source: "renewal",
         isFinal: true
       });
-      this.#session?.sendMessage(
-        "System note: this realtime session is aging. Verbally offer to reconnect now in one concise sentence."
-      );
+      this.#systemInjectedTexts.add(RENEWAL_NUDGE);
+      this.#session?.sendMessage(RENEWAL_NUDGE, { mission_control_origin: "session_renewal_nudge" });
       void this.#logEvent("voice.session_aging", { renewalThresholdMinutes: 50 });
       this.#emitSnapshot();
     }, SESSION_RENEWAL_MS);
@@ -327,13 +328,6 @@ export class MissionVoiceKernel {
       aging: this.#aging
     });
   }
-}
-
-function buildInstructions(stateSummary?: string) {
-  const summary = stateSummary?.trim();
-  if (!summary) return MISSION_CONTROL_INSTRUCTIONS;
-
-  return `${MISSION_CONTROL_INSTRUCTIONS}\n\nCarry forward this session state summary after reconnect: ${summary}`;
 }
 
 function extractText(content: RealtimeItem extends infer _ ? { type: string; text?: string; transcript?: string | null } : never) {

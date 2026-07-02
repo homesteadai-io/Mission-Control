@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell, session } from "electron";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { sanitizeDetail } from "./backend/eventSanitizer.js";
 import { appendEvent, appendTranscript, type TranscriptEntry } from "./backend/eventLog.js";
 import { mintRealtimeClientSecret } from "./backend/realtimeSecrets.js";
 
@@ -168,21 +169,6 @@ function assertTranscriptEntry(entry: TranscriptEntry) {
   if (!validRoles.has(entry.role)) throw new Error("Invalid transcript role");
   if (!validSources.has(entry.source)) throw new Error("Invalid transcript source");
   if (typeof entry.text !== "string") throw new Error("Invalid transcript text");
-}
-
-function sanitizeDetail(detail: Record<string, unknown> | undefined) {
-  if (!detail) return undefined;
-
-  return Object.fromEntries(
-    Object.entries(detail)
-      .filter(([key]) => !/key|secret|token|authorization/i.test(key))
-      .map(([key, value]) => [key, sanitizeValue(value)])
-  ) as Record<string, string | number | boolean | null>;
-}
-
-function sanitizeValue(value: unknown): string | number | boolean | null {
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
-  return null;
 }
 
 app.whenReady().then(() => {

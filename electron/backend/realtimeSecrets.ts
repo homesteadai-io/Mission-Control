@@ -15,12 +15,13 @@ export interface MintedRealtimeSecret {
   clientSecret: string;
   expiresAt?: number;
   model: typeof REALTIME_MODEL;
+  instructions: string;
 }
 
 export async function mintRealtimeClientSecret(projectRoot: string, options: MintRealtimeSecretOptions = {}) {
   const apiKey = readOpenAiApiKey(projectRoot);
   const sessionId = `mc_${randomUUID().replaceAll("-", "")}`;
-  const instructions = buildInstructions(options.stateSummary);
+  const instructions = buildMissionInstructions(options.stateSummary);
 
   const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
@@ -100,11 +101,12 @@ export async function mintRealtimeClientSecret(projectRoot: string, options: Min
     sessionId,
     clientSecret: body.value,
     expiresAt: typeof body.expires_at === "number" ? body.expires_at : undefined,
-    model: REALTIME_MODEL
+    model: REALTIME_MODEL,
+    instructions
   } satisfies MintedRealtimeSecret;
 }
 
-function buildInstructions(stateSummary?: string) {
+export function buildMissionInstructions(stateSummary?: string) {
   const summary = stateSummary?.trim();
   if (!summary) return MISSION_CONTROL_INSTRUCTIONS;
 
