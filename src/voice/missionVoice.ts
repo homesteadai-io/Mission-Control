@@ -182,7 +182,11 @@ export class MissionVoiceKernel {
       const transition = transitionAudioSession(this.#speaking, "audio_start");
       this.#speaking = transition.speaking;
       if (transition.bargeIn) {
-        this.#callbacks.onAvatarState("listening");
+        // New audio is starting in this same tick, so there's no separate
+        // "listening" moment to render here -- calling onAvatarState twice
+        // synchronously would just batch to whatever we call last. Log the
+        // barge-in for observability; the state below already reflects the
+        // real transition (back to speaking, for the new response).
         void this.#logEvent("voice.barge_in_detected", { source: "audio_start_overlap" });
       }
       this.#callbacks.onAvatarState("speaking");
