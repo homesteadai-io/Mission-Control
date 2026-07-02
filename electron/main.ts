@@ -1,11 +1,14 @@
 import { app, BrowserWindow, ipcMain, shell, session } from "electron";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { appendEvent, appendTranscript, type TranscriptEntry } from "./backend/eventLog.js";
+import { mintRealtimeClientSecret } from "./backend/realtimeSecrets.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+const projectRoot = process.cwd();
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -92,6 +95,90 @@ ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   mainWindow.center();
   return { ok: true, mode };
 });
+
+ipcMain.handle("voice:create-session", async (_event, options?: { stateSummary?: string }) => {
+  try {
+    const minted = await mintRealtimeClientSecret(projectRoot, {
+      stateSummary: typeof options?.stateSummary === "string" ? options.stateSummary : undefined
+    });
+    return { ok: true, ...minted };
+  } catch (error) {
+    await appendEvent(projectRoot, {
+      type: "voice.create_session_error",
+      detail: {
+        message: error instanceof Error ? error.message : "Unknown realtime session error"
+      }
+    });
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown realtime session error"
+    };
+  }
+});
+
+ipcMain.handle("voice:append-transcript", async (_event, sessionId: string, entry: TranscriptEntry) => {
+  try {
+    assertTranscriptEntry(entry);
+    await appendTranscript(projectRoot, sessionId, entry);
+    return { ok: true };
+  } catch (error) {
+    await appendEvent(projectRoot, {
+      type: "voice.append_transcript_error",
+      sessionId: typeof sessionId === "string" ? sessionId : undefined,
+      detail: {
+        message: error instanceof Error ? error.message : "Unknown transcript write error"
+      }
+    });
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown transcript write error"
+    };
+  }
+});
+
+ipcMain.handle("voice:log-event", async (_event, entry: { type: string; sessionId?: string; detail?: Record<string, unknown> }) => {
+  try {
+    if (!entry || typeof entry.type !== "string" || !entry.type.startsWith("voice.")) {
+      throw new Error("Invalid voice event");
+    }
+    await appendEvent(projectRoot, {
+      type: entry.type,
+      sessionId: typeof entry.sessionId === "string" ? entry.sessionId : undefined,
+      detail: sanitizeDetail(entry.detail)
+    });
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown event log error"
+    };
+  }
+});
+
+function assertTranscriptEntry(entry: TranscriptEntry) {
+  const validRoles = new Set(["user", "assistant", "system"]);
+  const validSources = new Set(["history", "event", "renewal", "manual"]);
+
+  if (!entry || typeof entry !== "object") throw new Error("Invalid transcript entry");
+  if (!validRoles.has(entry.role)) throw new Error("Invalid transcript role");
+  if (!validSources.has(entry.source)) throw new Error("Invalid transcript source");
+  if (typeof entry.text !== "string") throw new Error("Invalid transcript text");
+}
+
+function sanitizeDetail(detail: Record<string, unknown> | undefined) {
+  if (!detail) return undefined;
+
+  return Object.fromEntries(
+    Object.entries(detail)
+      .filter(([key]) => !/key|secret|token|authorization/i.test(key))
+      .map(([key, value]) => [key, sanitizeValue(value)])
+  ) as Record<string, string | number | boolean | null>;
+}
+
+function sanitizeValue(value: unknown): string | number | boolean | null {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  return null;
+}
 
 app.whenReady().then(() => {
   installSecurityGuards();

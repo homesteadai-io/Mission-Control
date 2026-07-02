@@ -11,3 +11,12 @@ export interface ArtifactRecord {
   createdAt: string;
   source: "seed" | "voice" | "tool";
 }
+
+export interface TranscriptEntry {
+  role: "user" | "assistant" | "system";
+  text: string;
+  source: "history" | "event" | "renewal" | "manual";
+  itemId?: string;
+  eventType?: string;
+  isFinal?: boolean;
+}
