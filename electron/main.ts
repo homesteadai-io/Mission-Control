@@ -39,7 +39,7 @@ function createWindow() {
     backgroundColor: "#0c131a",
     title: "Homestead Mission Control",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -73,9 +73,11 @@ ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   if (!mainWindow) return { ok: false };
 
   if (mode === "computer") {
+    mainWindow.setResizable(true);
+    mainWindow.setMinimumSize(180, 180);
     mainWindow.setAlwaysOnTop(true, "floating");
+    mainWindow.setContentSize(180, 180, true);
     mainWindow.setResizable(false);
-    mainWindow.setSize(180, 180, true);
     mainWindow.setOpacity(0.9);
     const display = mainWindow.getBounds();
     mainWindow.setPosition(Math.max(16, display.x), Math.max(16, display.y), true);
@@ -84,6 +86,7 @@ ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
 
   mainWindow.setOpacity(1);
   mainWindow.setResizable(true);
+  mainWindow.setMinimumSize(920, 620);
   mainWindow.setAlwaysOnTop(false);
   mainWindow.setSize(1280, 820, true);
   mainWindow.center();

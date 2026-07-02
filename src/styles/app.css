@@ -515,8 +515,8 @@ td {
 
 .orb-button {
   display: grid;
-  width: 150px;
-  height: 150px;
+  width: min(112px, 82vw, 82vh);
+  height: min(112px, 82vw, 82vh);
   place-items: center;
   overflow: hidden;
   border-radius: 50%;
@@ -526,7 +526,7 @@ td {
 
 .orb-button span {
   position: absolute;
-  bottom: 24px;
+  bottom: max(7px, 8%);
   color: #aee4ff;
   font-size: 12px;
   font-weight: 800;
@@ -534,15 +534,15 @@ td {
 
 .avatar-compact {
   min-height: unset;
-  width: 150px;
-  height: 150px;
+  width: 100%;
+  height: 100%;
   border: 0;
   background: transparent;
   box-shadow: none;
 }
 
 .avatar-compact img {
-  width: 110px;
+  width: min(82px, 68%);
 }
 
 .avatar-compact .avatar-status {
