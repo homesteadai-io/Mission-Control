@@ -16,13 +16,18 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: file:",
   "font-src 'self'",
-  "connect-src 'self' http://127.0.0.1:5173 ws://127.0.0.1:5173",
+  "connect-src 'self' http://127.0.0.1:5173 ws://127.0.0.1:5173 https://api.openai.com wss://api.openai.com",
+  "media-src 'self' blob: mediastream:",
   "object-src 'none'",
   "base-uri 'none'",
   "frame-ancestors 'none'"
 ].join("; ");
 
 function installSecurityGuards() {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === "media");
+  });
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {

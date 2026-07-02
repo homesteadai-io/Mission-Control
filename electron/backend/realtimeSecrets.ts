@@ -15,7 +15,6 @@ export interface MintedRealtimeSecret {
   clientSecret: string;
   expiresAt?: number;
   model: typeof REALTIME_MODEL;
-  instructions: string;
 }
 
 export async function mintRealtimeClientSecret(projectRoot: string, options: MintRealtimeSecretOptions = {}) {
@@ -101,8 +100,7 @@ export async function mintRealtimeClientSecret(projectRoot: string, options: Min
     sessionId,
     clientSecret: body.value,
     expiresAt: typeof body.expires_at === "number" ? body.expires_at : undefined,
-    model: REALTIME_MODEL,
-    instructions
+    model: REALTIME_MODEL
   } satisfies MintedRealtimeSecret;
 }
 

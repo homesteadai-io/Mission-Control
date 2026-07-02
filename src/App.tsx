@@ -1,5 +1,16 @@
-import { useMemo, useState } from "react";
-import { ChevronLeft, MonitorDot, PanelRightOpen, Radio, Settings, Shrink, Volume2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import {
+  ChevronLeft,
+  Mic,
+  MicOff,
+  MonitorDot,
+  PanelRightOpen,
+  Radio,
+  RefreshCw,
+  Settings,
+  Shrink,
+  Volume2
+} from "lucide-react";
 import { seedArtifacts } from "./artifacts/seedArtifacts";
 import { ArtifactErrorBoundary } from "./components/ArtifactErrorBoundary";
 import { ArtifactPanel } from "./components/ArtifactPanel";
@@ -7,6 +18,7 @@ import { Avatar } from "./components/Avatar";
 import { MenuOverlay } from "./components/MenuOverlay";
 import { Transcript } from "./components/Transcript";
 import type { AvatarState, CockpitMode } from "./types";
+import { MissionVoiceKernel, type MissionVoiceSnapshot, type TranscriptLine } from "./voice/missionVoice";
 
 const toolGroups = [
   {
@@ -37,13 +49,36 @@ const toolGroups = [
 
 export function App() {
   const [mode, setMode] = useState<CockpitMode>("display");
-  const [avatarState, setAvatarState] = useState<AvatarState>("listening");
+  const [avatarState, setAvatarState] = useState<AvatarState>("idle");
   const [selectedId, setSelectedId] = useState(seedArtifacts[0].id);
+  const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
+  const [voiceSnapshot, setVoiceSnapshot] = useState<MissionVoiceSnapshot>({
+    connected: false,
+    connecting: false,
+    alwaysListening: true,
+    pushToTalkActive: false,
+    aging: false
+  });
+  const voiceKernelRef = useRef<MissionVoiceKernel | null>(null);
 
   const selectedArtifact = useMemo(
     () => seedArtifacts.find((artifact) => artifact.id === selectedId) ?? seedArtifacts[0],
     [selectedId]
   );
+
+  const voiceKernel = () => {
+    if (!window.missionControl?.voice) {
+      throw new Error("Mission Control voice bridge is unavailable.");
+    }
+
+    voiceKernelRef.current ??= new MissionVoiceKernel(window.missionControl, {
+      onAvatarState: setAvatarState,
+      onTranscript: (line) => setTranscriptLines((current) => [...current, line].slice(-80)),
+      onSnapshot: setVoiceSnapshot
+    });
+
+    return voiceKernelRef.current;
+  };
 
   const enterComputerMode = async () => {
     setMode("computer");
@@ -53,8 +88,33 @@ export function App() {
 
   const exitComputerMode = async () => {
     setMode("display");
-    setAvatarState("listening");
+    setAvatarState(voiceSnapshot.connected && voiceSnapshot.alwaysListening ? "listening" : "idle");
     await window.missionControl?.setWindowMode("display");
+  };
+
+  const toggleConnection = async () => {
+    const kernel = voiceKernel();
+    if (voiceSnapshot.connected) {
+      await kernel.disconnect();
+      return;
+    }
+    await kernel.connect();
+  };
+
+  const toggleAlwaysListening = () => {
+    voiceKernel().setAlwaysListening(!voiceSnapshot.alwaysListening);
+  };
+
+  const startPushToTalk = () => {
+    voiceKernel().setPushToTalkActive(true);
+  };
+
+  const stopPushToTalk = () => {
+    voiceKernel().setPushToTalkActive(false);
+  };
+
+  const renewSession = async () => {
+    await voiceKernel().reconnectWithSummary();
   };
 
   if (mode === "computer") {
@@ -76,9 +136,9 @@ export function App() {
           <span>Homestead Mission Control</span>
         </div>
         <Avatar state={avatarState} />
-        <Transcript state={avatarState} />
+        <Transcript state={avatarState} lines={transcriptLines} />
         <div className="state-controls" aria-label="Avatar state controls">
-          {(["idle", "listening", "thinking", "speaking", "degraded"] as AvatarState[]).map((state) => (
+          {(["idle", "listening", "thinking", "speaking", "aging", "degraded"] as AvatarState[]).map((state) => (
             <button
               key={state}
               className={avatarState === state ? "is-active" : ""}
@@ -128,13 +188,29 @@ export function App() {
       </section>
 
       <footer className="bottom-bar">
-        <button>
+        <button onClick={toggleConnection} className={voiceSnapshot.connected ? "is-active" : ""}>
           <Radio size={16} />
-          Connect
+          {voiceSnapshot.connecting ? "Connecting" : voiceSnapshot.connected ? "Disconnect" : "Connect"}
         </button>
-        <button>
+        <button onClick={toggleAlwaysListening} className={voiceSnapshot.alwaysListening ? "is-active" : ""}>
+          {voiceSnapshot.alwaysListening ? <Mic size={16} /> : <MicOff size={16} />}
+          Always Listening
+        </button>
+        <button
+          disabled={!voiceSnapshot.connected || voiceSnapshot.alwaysListening}
+          className={voiceSnapshot.pushToTalkActive ? "is-active" : ""}
+          onMouseDown={startPushToTalk}
+          onMouseUp={stopPushToTalk}
+          onMouseLeave={stopPushToTalk}
+          onTouchStart={startPushToTalk}
+          onTouchEnd={stopPushToTalk}
+        >
           <Volume2 size={16} />
-          Mute
+          Hold to Talk
+        </button>
+        <button disabled={!voiceSnapshot.aging} onClick={renewSession}>
+          <RefreshCw size={16} />
+          Renew
         </button>
         <button onClick={() => setMode("menu")}>
           <PanelRightOpen size={16} />

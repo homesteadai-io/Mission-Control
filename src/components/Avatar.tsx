@@ -38,6 +38,8 @@ function labelForState(state: AvatarState) {
       return "Working...";
     case "speaking":
       return "Speaking";
+    case "aging":
+      return "Session aging";
     case "degraded":
       return "Door unreachable: /api/agent/boot";
   }

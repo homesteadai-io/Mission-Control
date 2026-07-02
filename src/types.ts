@@ -1,5 +1,5 @@
 export type CockpitMode = "display" | "computer" | "menu";
-export type AvatarState = "idle" | "listening" | "thinking" | "speaking" | "degraded";
+export type AvatarState = "idle" | "listening" | "thinking" | "speaking" | "aging" | "degraded";
 
 export type ArtifactType = "markdown" | "mermaid" | "table" | "image-grid";
 
