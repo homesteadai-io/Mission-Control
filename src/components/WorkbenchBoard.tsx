@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { FileText, FolderOpen, Image as ImageIcon, Send, UploadCloud } from "lucide-react";
-import type { BoardMessage, BoardStatus, WorkspaceFileInfo } from "../missionControlApi";
+import { Check, FileText, FolderOpen, Image as ImageIcon, Send, ShieldAlert, UploadCloud, X } from "lucide-react";
+import type { BoardMessage, BoardPermission, BoardStatus, PermissionReply, WorkspaceFileInfo } from "../missionControlApi";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"]);
 const POLL_INTERVAL_MS = 1500;
@@ -13,6 +13,7 @@ export function WorkbenchBoard() {
   const [boardStatus, setBoardStatus] = useState<BoardStatus>("starting");
   const [statusDetail, setStatusDetail] = useState<string | null>(null);
   const [messages, setMessages] = useState<BoardMessage[]>([]);
+  const [permissions, setPermissions] = useState<BoardPermission[]>([]);
   const [draft, setDraft] = useState("");
   const [awaitingReply, setAwaitingReply] = useState(false);
   const dragDepth = useRef(0);
@@ -50,7 +51,35 @@ export function WorkbenchBoard() {
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight });
-  }, [messages, awaitingReply]);
+  }, [messages, awaitingReply, permissions]);
+
+  // Poll opencode for ask-gated tool requests and surface them as chips.
+  useEffect(() => {
+    if (!board || boardStatus !== "ready") return;
+    let cancelled = false;
+    const tick = async () => {
+      const result = await board.permissions();
+      if (!cancelled && result.ok && result.permissions) setPermissions(result.permissions);
+    };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [boardStatus]);
+
+  const decide = async (permission: BoardPermission, reply: PermissionReply) => {
+    if (!board) return;
+    // optimistic removal so the chip doesn't linger while the tool resumes
+    setPermissions((current) => current.filter((p) => p.id !== permission.id));
+    const result = await board.replyPermission(permission.id, reply);
+    if (!result.ok) {
+      setNotice(result.error ?? "Could not send the approval");
+      const refreshed = await board.permissions();
+      if (refreshed.ok && refreshed.permissions) setPermissions(refreshed.permissions);
+    }
+  };
 
   const refreshMessages = async () => {
     if (!board) return [] as BoardMessage[];
@@ -191,6 +220,31 @@ export function WorkbenchBoard() {
             </div>
           ) : null}
         </div>
+
+        {permissions.map((permission) => (
+          <div key={permission.id} className="approval-chip" role="alertdialog" aria-label="Tool approval">
+            <div className="approval-head">
+              <ShieldAlert size={15} />
+              <span>
+                Charli wants to run <b>{permission.action}</b>
+              </span>
+            </div>
+            {permission.resources.length > 0 ? (
+              <pre className="approval-detail">{permission.resources.join("\n").slice(0, 500)}</pre>
+            ) : null}
+            <div className="approval-actions">
+              <button className="approve" onClick={() => void decide(permission, "once")}>
+                <Check size={13} /> Allow once
+              </button>
+              <button className="approve-always" onClick={() => void decide(permission, "always")}>
+                Always
+              </button>
+              <button className="deny" onClick={() => void decide(permission, "reject")}>
+                <X size={13} /> Deny
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
       <footer className="workbench-composer">

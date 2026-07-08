@@ -55,11 +55,21 @@ export interface BoardMessage {
   model?: string;
 }
 
+export interface BoardPermission {
+  id: string;
+  action: string;
+  resources: string[];
+}
+
+export type PermissionReply = "once" | "always" | "reject";
+
 export interface BoardApi {
   status: () => Promise<{ ok: boolean; status?: BoardStatus }>;
   prompt: (text: string) => Promise<{ ok: boolean; sessionId?: string; error?: string }>;
   messages: () => Promise<{ ok: boolean; messages?: BoardMessage[]; error?: string }>;
   newSession: () => Promise<{ ok: boolean }>;
+  permissions: () => Promise<{ ok: boolean; permissions?: BoardPermission[]; error?: string }>;
+  replyPermission: (requestId: string, reply: PermissionReply) => Promise<{ ok: boolean; error?: string }>;
   onStatusChanged: (callback: (status: BoardStatus, detail: string | null) => void) => () => void;
 }
 

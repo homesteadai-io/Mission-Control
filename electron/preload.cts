@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld("missionControl", {
     prompt: (text: string) => ipcRenderer.invoke("board:prompt", text),
     messages: () => ipcRenderer.invoke("board:messages"),
     newSession: () => ipcRenderer.invoke("board:new-session"),
+    permissions: () => ipcRenderer.invoke("board:permissions"),
+    replyPermission: (requestId: string, reply: string) =>
+      ipcRenderer.invoke("board:reply-permission", requestId, reply),
     onStatusChanged: (callback: (status: string, detail: string | null) => void) => {
       const handler = (_event: unknown, status: string, detail: string | null) => callback(status, detail);
       ipcRenderer.on("board:status-changed", handler);

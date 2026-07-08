@@ -171,6 +171,40 @@ async function ensureSession(): Promise<string> {
   return id;
 }
 
+export interface BoardPermission {
+  id: string;
+  action: string;
+  resources: string[];
+}
+
+/** Pending approvals for the active board session (opencode's ask-gated tools). */
+export async function listBoardPermissions(): Promise<BoardPermission[]> {
+  if (!sessionId) return [];
+  const response = await fetch(`${baseUrl()}/api/session/${sessionId}/permission`);
+  if (!response.ok) return [];
+  const payload = (await response.json()) as {
+    data?: Array<{ id?: string; action?: string; resources?: unknown }>;
+  };
+  return (payload.data ?? [])
+    .filter((p): p is { id: string; action: string; resources?: unknown } => typeof p.id === "string")
+    .map((p) => ({
+      id: p.id,
+      action: typeof p.action === "string" ? p.action : "tool",
+      resources: Array.isArray(p.resources) ? p.resources.map((r) => String(r)) : []
+    }));
+}
+
+export async function replyBoardPermission(requestId: string, reply: "once" | "always" | "reject") {
+  if (!sessionId) throw new Error("No active board session");
+  const response = await fetch(`${baseUrl()}/api/session/${sessionId}/permission/${requestId}/reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reply })
+  });
+  if (!response.ok) throw new Error(`Permission reply failed: HTTP ${response.status}`);
+  return { ok: true };
+}
+
 export async function promptBoard(text: string) {
   if (status !== "ready") throw new Error(`Board is ${status}`);
   const id = await ensureSession();

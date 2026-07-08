@@ -1153,3 +1153,65 @@ body.is-resizing-desk .desk-pane-terminal,
 body.is-resizing-desk iframe {
   pointer-events: none;
 }
+
+/* Approval chips — ask-gated board tool requests */
+.approval-chip {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 200, 120, 0.5);
+  border-radius: 12px;
+  background: rgba(40, 30, 12, 0.55);
+}
+
+.approval-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ffd9a3;
+  font-size: 13px;
+}
+
+.approval-head b {
+  color: #ffe9c7;
+}
+
+.approval-detail {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #e6f2fb;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.approval-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.approval-actions .approve {
+  border-color: rgba(111, 227, 161, 0.6);
+  background: rgba(111, 227, 161, 0.16);
+  color: #b6ffd8;
+}
+
+.approval-actions .deny {
+  border-color: rgba(255, 157, 157, 0.6);
+  background: rgba(255, 157, 157, 0.14);
+  color: #ffc4c4;
+}

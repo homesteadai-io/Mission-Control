@@ -21,8 +21,10 @@ import { importFile, isInsideWorkspace, listFiles } from "./backend/workspaceFil
 import {
   getBoardStatus,
   listBoardMessages,
+  listBoardPermissions,
   onBoardStatus,
   promptBoard,
+  replyBoardPermission,
   resetBoardSession,
   startBoard,
   stopBoard
@@ -262,6 +264,27 @@ ipcMain.handle("board:messages", async () => {
 ipcMain.handle("board:new-session", () => {
   resetBoardSession();
   return { ok: true };
+});
+
+ipcMain.handle("board:permissions", async () => {
+  try {
+    return { ok: true, permissions: await listBoardPermissions() };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Permission list failed" };
+  }
+});
+
+ipcMain.handle("board:reply-permission", async (_event, requestId: string, reply: string) => {
+  try {
+    if (typeof requestId !== "string" || !["once", "always", "reject"].includes(reply)) {
+      throw new Error("Invalid permission reply");
+    }
+    await replyBoardPermission(requestId, reply as "once" | "always" | "reject");
+    await appendEvent(projectRoot, { type: "desk.board_permission_reply", detail: { reply } });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Permission reply failed" };
+  }
 });
 
 ipcMain.handle("workspace:import", async (_event, rawName: string, bytes: ArrayBuffer) => {

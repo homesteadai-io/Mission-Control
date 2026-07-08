@@ -188,8 +188,13 @@ approval-chip UI deferred to a connected model. All checks green: typecheck,
   **PROVEN 2026-07-08 (clean process state, valid key):** board reply metadata
   = `{providerID: "openai", modelID: "gpt-5.4-mini", finish: "stop",
   tokens: 1766}` — real metered call, not the free fallback.
-  Still TODO: the approval-chip UI (the permission gate + reply API are wired;
-  the chips that surface/answer them aren't built yet).
+  **Approval-chip UI: BUILT & PROVEN 2026-07-08.** Board polls
+  `/api/session/{id}/permission`; ask-gated tool requests render as chips
+  (action + command) with Allow once / Always / Deny → `.../reply`. Live
+  acceptance on gpt-5.4-mini: **Approve** — chip appeared ("Charli wants to run
+  bash · echo …"), clicked Allow once, chip cleared, board completed the tool;
+  **Deny** — chip appeared, clicked Deny, chip cleared. Chips show the command,
+  never any secret.
 - **6 ✅** Voice switchboard: `send_to_agent` tool routes spoken/typed
   commands into a pane's pty or the board; dispatch logged to events.jsonl.
   Unit-tested; IPC delivery live-verified.
@@ -208,7 +213,8 @@ approval-chip UI deferred to a connected model. All checks green: typecheck,
   bundle; the key is referenced only under `electron/backend/*` (main process).
 - Full spoken exchange + barge-in — **NOT re-proven this build** (needs a mic +
   real speech; manual check).
-- Approval-chip UI — **NOT built**; unblocked now that a capable model answers.
+- Approval-chip UI — **BUILT & PROVEN** (approve + deny round-trips live on
+  gpt-5.4-mini through the real UI).
 
 ### Human-hand items before daily use
 1. `.env.local` `OPENAI_API_KEY` present (done, verified) — powers board model
