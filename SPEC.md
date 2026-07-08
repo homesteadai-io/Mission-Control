@@ -181,11 +181,13 @@ approval-chip UI deferred to a connected model. All checks green: typecheck,
   Live-verified real model reply through the real UI.
 - **5 ◐** Config half shipped: opencode.json generated with bash/edit/webfetch
   = "ask" and MCP scaffold (Keep Socket read-lane stub, disabled). Board model
-  set to `openai/gpt-5.4-mini`; supervisor injects `OPENAI_API_KEY` from
-  .env.local into opencode's env only (never a workspace file, never the
-  renderer). **PROVEN 2026-07-08 (clean process state, valid key):** board
-  reply metadata = `{providerID: "openai", modelID: "gpt-5.4-mini",
-  finish: "stop", tokens: 1766}` — real metered call, not the free fallback.
+  set to `openai/gpt-5.4-mini`. The supervisor reads `OPENAI_API_KEY` from the
+  local gitignored `.env.local` and injects it into opencode's **process env
+  only** — it is NOT written into any workspace file (e.g. opencode.json), NOT
+  committed, and NOT sent across the preload bridge to the renderer.
+  **PROVEN 2026-07-08 (clean process state, valid key):** board reply metadata
+  = `{providerID: "openai", modelID: "gpt-5.4-mini", finish: "stop",
+  tokens: 1766}` — real metered call, not the free fallback.
   Still TODO: the approval-chip UI (the permission gate + reply API are wired;
   the chips that surface/answer them aren't built yet).
 - **6 ✅** Voice switchboard: `send_to_agent` tool routes spoken/typed
@@ -195,7 +197,15 @@ approval-chip UI deferred to a connected model. All checks green: typecheck,
 ### Verification ledger (what is / isn't proven)
 - Board runs on gpt-5.4-mini — **PROVEN** (response metadata, clean state).
 - Voice ephemeral-key mint (connect precondition) — **PROVEN** (createSession
-  returns ok + `ek_` client secret + sessionId, model gpt-realtime-2).
+  returns ok + `ek_` client secret + sessionId, model gpt-realtime-2). Only the
+  `ek_` prefix is ever logged — the full ephemeral secret is never printed to
+  logs, SPEC, or PR comments.
+- Renderer secret boundary — **PROVEN** (2026-07-08). In the sandboxed renderer:
+  `process`/`require`/`Buffer`/`global` are `undefined`; `window.missionControl`
+  exposes only narrow IPC methods (none return the raw key); no key-named window
+  prop; `createSession` returns only an `ek_` ephemeral (no `sk-`). Static: no
+  `VITE_`-prefixed secret, no `sk-`/`OPENAI_API_KEY` in the built renderer
+  bundle; the key is referenced only under `electron/backend/*` (main process).
 - Full spoken exchange + barge-in — **NOT re-proven this build** (needs a mic +
   real speech; manual check).
 - Approval-chip UI — **NOT built**; unblocked now that a capable model answers.
