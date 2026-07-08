@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld("missionControl", {
     logEvent: (entry: { type: string; sessionId?: string; detail?: Record<string, unknown> }) =>
       ipcRenderer.invoke("voice:log-event", entry)
   },
+  workspace: {
+    importFile: (name: string, bytes: ArrayBuffer) => ipcRenderer.invoke("workspace:import", name, bytes),
+    list: () => ipcRenderer.invoke("workspace:list"),
+    reveal: (filePath: string) => ipcRenderer.invoke("workspace:reveal", filePath)
+  },
   terminal: {
     spawn: (id: string, profile: string, cols: number, rows: number) =>
       ipcRenderer.invoke("pty:spawn", id, profile, cols, rows),

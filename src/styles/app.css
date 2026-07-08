@@ -956,3 +956,82 @@ td {
     flex-basis: 100%;
   }
 }
+
+/* Workbench files + drop states */
+
+.workbench-board.is-drop-target {
+  border-color: rgba(127, 212, 255, 0.6);
+  box-shadow: 0 0 0 2px rgba(127, 212, 255, 0.25) inset;
+}
+
+.workbench-drophint {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 22px 12px;
+  margin-bottom: 12px;
+  border: 1px dashed rgba(127, 212, 255, 0.5);
+  border-radius: 12px;
+  color: #7fd4ff;
+  text-align: center;
+}
+
+.workbench-drophint p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.workbench-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 157, 157, 0.4);
+  border-radius: 10px;
+  color: #ffb9b9;
+  font-size: 12px;
+}
+
+.workbench-notice button {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.workbench-files {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  text-align: left;
+}
+
+.file-card .file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.file-card small {
+  color: #8fb2c7;
+  font-size: 11px;
+}
+
+.file-card .file-reveal {
+  color: #6f92a8;
+}

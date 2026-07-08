@@ -1,4 +1,5 @@
 import { spawn, type IPty } from "@lydell/node-pty";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -78,7 +79,14 @@ export function killPane(id: string) {
   if (!pane) return;
   panes.delete(id);
   try {
-    pane.proc.kill();
+    if (process.platform === "win32") {
+      // pty.kill() closes the ConPTY root (often cmd.exe) but leaves
+      // grandchildren (the real CLI's node process) alive. taskkill /T
+      // walks and force-kills the whole tree.
+      execFileSync("taskkill", ["/pid", String(pane.proc.pid), "/T", "/F"], { stdio: "ignore" });
+    } else {
+      pane.proc.kill();
+    }
   } catch {
     // already dead
   }

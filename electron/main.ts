@@ -17,6 +17,7 @@ import {
   writePane,
   type PaneProfile
 } from "./backend/ptyManager.js";
+import { importFile, isInsideWorkspace, listFiles } from "./backend/workspaceFiles.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -220,6 +221,38 @@ ipcMain.handle("pty:kill", (_event, id: string) => {
 
 ipcMain.handle("pty:is-running", (_event, id: string) => {
   return { ok: true, running: PANE_IDS.has(id) && paneIsRunning(id) };
+});
+
+ipcMain.handle("workspace:import", async (_event, rawName: string, bytes: ArrayBuffer) => {
+  try {
+    if (typeof rawName !== "string" || !(bytes instanceof ArrayBuffer)) {
+      throw new Error("Invalid import payload");
+    }
+    const info = importFile(workspaceDir, rawName, new Uint8Array(bytes));
+    await appendEvent(projectRoot, {
+      type: "desk.workspace_file_added",
+      detail: { name: info.name, size: info.size }
+    });
+    return { ok: true, file: info };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Import failed" };
+  }
+});
+
+ipcMain.handle("workspace:list", () => {
+  try {
+    return { ok: true, files: listFiles(workspaceDir), workspaceDir };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "List failed" };
+  }
+});
+
+ipcMain.handle("workspace:reveal", (_event, filePath: string) => {
+  if (typeof filePath !== "string" || !isInsideWorkspace(workspaceDir, filePath)) {
+    return { ok: false, error: "Path is outside the workspace" };
+  }
+  shell.showItemInFolder(path.resolve(filePath));
+  return { ok: true };
 });
 
 function clampInt(value: unknown, min: number, max: number, fallback: number) {

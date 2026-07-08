@@ -90,6 +90,9 @@ export function TerminalPane({ paneId, profile, title }: TerminalPaneProps) {
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      // Kill the pty on unmount so nothing runs detached from the UI.
+      // (StrictMode dev double-mount just restarts the pane once.)
+      void bridge.kill(paneId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, profile]);

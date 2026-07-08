@@ -32,6 +32,19 @@ export interface TerminalApi {
   onExit: (callback: (id: string, exitCode: number) => void) => () => void;
 }
 
+export interface WorkspaceFileInfo {
+  name: string;
+  path: string;
+  size: number;
+  modifiedAt: string;
+}
+
+export interface WorkspaceApi {
+  importFile: (name: string, bytes: ArrayBuffer) => Promise<{ ok: boolean; file?: WorkspaceFileInfo; error?: string }>;
+  list: () => Promise<{ ok: boolean; files?: WorkspaceFileInfo[]; workspaceDir?: string; error?: string }>;
+  reveal: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
+}
+
 export interface MissionControlApi {
   setWindowMode: (mode: Exclude<CockpitMode, "menu">) => Promise<{ ok: boolean; mode?: string }>;
   voice: {
@@ -40,4 +53,5 @@ export interface MissionControlApi {
     logEvent: (entry: VoiceLogEvent) => Promise<{ ok: boolean; error?: string }>;
   };
   terminal: TerminalApi;
+  workspace: WorkspaceApi;
 }
