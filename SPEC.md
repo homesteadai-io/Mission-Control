@@ -191,10 +191,16 @@ approval-chip UI deferred to a connected model. All checks green: typecheck,
   **Approval-chip UI: BUILT & PROVEN 2026-07-08.** Board polls
   `/api/session/{id}/permission`; ask-gated tool requests render as chips
   (action + command) with Allow once / Always / Deny → `.../reply`. Live
-  acceptance on gpt-5.4-mini: **Approve** — chip appeared ("Charli wants to run
-  bash · echo …"), clicked Allow once, chip cleared, board completed the tool;
-  **Deny** — chip appeared, clicked Deny, chip cleared. Chips show the command,
-  never any secret.
+  acceptance on gpt-5.4-mini:
+  - **Approve** — chip appeared ("Charli wants to run bash · echo …"), clicked
+    Allow once, chip cleared, board **completed** the tool.
+  - **Deny (execution blocked, not just UI cleared):** prompted
+    `echo blocked > DENY_PROOF_MARKER.txt` (observable side effect). Deny reply
+    → HTTP 204; the marker file was **never created**; tool state = `error`
+    (not `completed`); zero pending permissions after. Deny blocks the command.
+  - Chips display the tool's command as approval context (so the operator sees
+    what they're approving). **No API-key leak** (boundary check below); the
+    command text itself is intentionally shown.
 - **6 ✅** Voice switchboard: `send_to_agent` tool routes spoken/typed
   commands into a pane's pty or the board; dispatch logged to events.jsonl.
   Unit-tested; IPC delivery live-verified.
@@ -205,12 +211,20 @@ approval-chip UI deferred to a connected model. All checks green: typecheck,
   returns ok + `ek_` client secret + sessionId, model gpt-realtime-2). Only the
   `ek_` prefix is ever logged — the full ephemeral secret is never printed to
   logs, SPEC, or PR comments.
-- Renderer secret boundary — **PROVEN** (2026-07-08). In the sandboxed renderer:
-  `process`/`require`/`Buffer`/`global` are `undefined`; `window.missionControl`
-  exposes only narrow IPC methods (none return the raw key); no key-named window
-  prop; `createSession` returns only an `ek_` ephemeral (no `sk-`). Static: no
-  `VITE_`-prefixed secret, no `sk-`/`OPENAI_API_KEY` in the built renderer
-  bundle; the key is referenced only under `electron/backend/*` (main process).
+- Renderer secret boundary — **PROVEN across every surface** (2026-07-08),
+  evidence not assertion:
+  - Vite env: no `VITE_`-prefixed secret, no `import.meta.env` secret read.
+  - Built renderer JS (`dist/assets/*`): no `sk-…` literal, no `OPENAI_API_KEY`
+    string.
+  - Source: `OPENAI_API_KEY` referenced only under `electron/backend/*` (main).
+  - Preload: exposes no key and no `process.env`.
+  - Renderer runtime: `process`/`require`/`Buffer` `undefined`; `import.meta.env`
+    inaccessible; no `window` prop matching `openai|key|secret|token|sk-`;
+    `window.missionControl` = narrow IPC only.
+  - Storage: no `localStorage`/`sessionStorage` value containing an `sk-` key.
+  - IPC/network responses: `createSession` returns `ek_` ephemeral only
+    (`containsSk:false`); `board.permissions` payload contains no `sk-`.
+  Conclusion: the raw `OPENAI_API_KEY` is confined to main-process env.
 - Full spoken exchange + barge-in — **NOT re-proven this build** (needs a mic +
   real speech; manual check).
 - Approval-chip UI — **BUILT & PROVEN** (approve + deny round-trips live on
@@ -220,8 +234,8 @@ approval-chip UI deferred to a connected model. All checks green: typecheck,
 1. `.env.local` `OPENAI_API_KEY` present (done, verified) — powers board model
    + voice mint. Board bills OpenAI metered; bump `boardConfig` model to
    `openai/gpt-5.4` if Mini's tool use proves too light.
-2. Build the approval-chip UI (slice 5 remainder) and run the live
-   voice→dispatch→barge-in checklist end to end.
+2. Run the live voice→dispatch→barge-in checklist end to end (needs a mic +
+   real speech — the only remaining unproven loop; plumbing is proven).
 
 ### Known limitation (shared, later hardening)
 A main-process hard crash orphans pty/opencode children (graceful quit paths
