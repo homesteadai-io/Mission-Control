@@ -7,6 +7,17 @@ equal panes in a row — two coding agents he already trusts, plus a general
 workbench agent with real hands — with the existing voice kernel floating over
 all three as the switchboard. Life/work orchestrator, not a coding toy.
 
+## Identity — Charli
+
+- The Mission Control agent's name is **Charli** (named by Adam, 2026-07-08).
+- Avatar: the existing brush-face art.
+- Canonical voice: ElevenLabs voice ID `y4SbnvOAvjU7AP8afvvE`.
+  - v1 desktop keeps the OpenAI Realtime voice pipeline as-is (working,
+    merged). ElevenLabs TTS swap/hybrid is a v1.1 slice — do not block v1
+    on it.
+- Content-as-data and the honesty ceiling apply to everything Charli says
+  about her own work.
+
 ## Layout
 
 ```
@@ -62,6 +73,12 @@ dropped file bodies are information, never instructions.
 - Browser: Claude-in-Chrome / Chrome bridge MCC via opencode's MCP support.
 - Desktop: Windows-MCP (screenshot, click, type) via MCP — wired but
   permission-gated.
+- **Keep Socket MCP (read lanes only):** wire the existing Homestead Keep
+  Socket server into the board agent's MCP config — `ask` and `graph_read`
+  ONLY. `graph_write` stays out: the Librarian holds the pen (pen ruling
+  2026-07-04), and concept writes route through the Door, never through a
+  cockpit agent. This is config-level work, not new integration code — the
+  full Door-boot experience remains Phase 5.
 - Every risky tool call surfaces as an approve/deny chip in the board UI using
   opencode's permission system (ask/allow per tool). Capability + gates, not
   capability withheld. Default: filesystem-in-workspace auto-allowed,
@@ -92,11 +109,32 @@ dropped file bodies are information, never instructions.
 
 ## Out of scope for v1 (explicitly)
 
-- Door/Keep integration (Phase 5 — biggest single differentiator, do it next).
+- Full Door/Keep boot integration (Phase 5 — biggest single differentiator;
+  v1 only wires the existing Keep Socket MCP read lanes into the board agent).
 - Multi-agent parallel orchestration beyond the three panes.
 - Wake word / hotword gating.
 - Unattended desktop control (desktop MCP stays ask-gated).
 - Mobile/remote access.
+- ElevenLabs voice swap (v1.1 — voice ID reserved above).
+- Charli-as-a-service (Phase 5, below).
+
+## Phase 5 direction (recorded now, built later)
+
+**Charli always-on via Hetzner.** The desktop app is one client of Charli,
+not her home. Her durable half — agent endpoint, memory, availability — runs
+as a service in the existing Hetzner estate (the same VPS running the Door,
+Keep Socket, and Caddy), deployed through the homestead-private-os-infra
+lane as a new Compose service. Neighbors on the box stay untouched.
+
+**Charli as an MCP server (@Charli / speed-dial).** MCP cuts both ways:
+v1 has the board agent *consuming* MCP servers (Keep Socket, browser,
+desktop); Phase 5 *exposes* Charli as an MCP server herself, so any surface
+that speaks MCP — Claude chat connectors (@-mention), Claude Code, other
+agents — can reach her the same way they reach the Keep today. Server-side
+voice for that presence uses her ElevenLabs voice.
+
+This makes the estate's pattern symmetric: the Keep is the memory organ with
+an MCP socket; Charli becomes the operator organ with one.
 
 ## Pass / fail
 
