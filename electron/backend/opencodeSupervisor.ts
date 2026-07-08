@@ -69,10 +69,23 @@ export function startBoard(workspaceDir: string) {
     windowsHide: true
   });
 
+  child.on("error", (err) => {
+    // Fires when opencode isn't installed (ENOENT) or can't be spawned.
+    child = null;
+    sessionId = null;
+    setStatus(
+      "error",
+      err.message.includes("ENOENT")
+        ? "opencode is not installed — run: npm i -g opencode-ai"
+        : `opencode failed to start: ${err.message}`
+    );
+  });
+
   child.on("exit", (code) => {
     child = null;
     sessionId = null;
     if (status === "stopped") return; // intentional shutdown
+    if (status === "error") return; // spawn 'error' already handled this (e.g. ENOENT)
     if (restarts < MAX_RESTARTS) {
       restarts += 1;
       setStatus("starting", `opencode exited (code ${code}); restart ${restarts}/${MAX_RESTARTS}`);

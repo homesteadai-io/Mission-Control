@@ -119,19 +119,8 @@ export function App() {
     await voiceKernel().reconnectWithSummary();
   };
 
-  if (mode === "computer") {
-    return (
-      <main className="orb-shell" aria-label="Mission Control compact mode">
-        <button className="orb-button" onClick={exitComputerMode} aria-label="Restore display mode">
-          <Avatar state="idle" compact />
-          <span>MC</span>
-        </button>
-      </main>
-    );
-  }
-
   return (
-    <main className="desk-shell">
+    <main className={`desk-shell ${mode === "computer" ? "is-orb" : ""}`}>
       <header className="desk-strip">
         <div className="desk-identity">
           <Avatar state={avatarState} degradedReason={degradedReason} compact />
@@ -191,6 +180,15 @@ export function App() {
       </header>
 
       <OperatorDesk />
+
+      {mode === "computer" ? (
+        <div className="orb-overlay" aria-label="Mission Control compact mode">
+          <button className="orb-button" onClick={exitComputerMode} aria-label="Restore display mode">
+            <Avatar state="idle" compact />
+            <span>MC</span>
+          </button>
+        </div>
+      ) : null}
 
       {artifactsOpen ? (
         <div className="artifacts-backdrop" role="dialog" aria-modal="true" aria-label="Artifacts">
