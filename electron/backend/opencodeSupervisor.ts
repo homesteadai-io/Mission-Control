@@ -2,6 +2,7 @@ import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { ensureBoardConfig } from "./boardConfig.js";
 
 export type BoardStatus = "stopped" | "starting" | "ready" | "error";
 
@@ -51,6 +52,14 @@ function resolveOpencodeCommand(): { file: string; args: string[] } {
 export function startBoard(workspaceDir: string) {
   if (child) return;
   setStatus("starting");
+
+  // Write the permission-gated config before serve reads it. Never clobbers a
+  // user-authored opencode.json.
+  try {
+    ensureBoardConfig(workspaceDir);
+  } catch {
+    // config write is best-effort; opencode still serves with defaults
+  }
 
   const { file, args } = resolveOpencodeCommand();
   child = spawn(file, args, {
