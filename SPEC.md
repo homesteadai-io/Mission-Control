@@ -180,19 +180,31 @@ approval-chip UI deferred to a connected model. All checks green: typecheck,
   auto-restart, tree-reap on quit); board chat text-first over its REST API.
   Live-verified real model reply through the real UI.
 - **5 ◐** Config half shipped: opencode.json generated with bash/edit/webfetch
-  = "ask" and MCP scaffold (Keep Socket read-lane stub, disabled). opencode
-  loads it cleanly. **Approval-chip UI + live MCP need a connected capable
-  model (`opencode /connect` — Adam's ChatGPT sub); free models emit
-  incomplete tool calls so the permission path can't be exercised yet.**
+  = "ask" and MCP scaffold (Keep Socket read-lane stub, disabled). Board model
+  set to `openai/gpt-5.4-mini`; supervisor injects `OPENAI_API_KEY` from
+  .env.local into opencode's env only (never a workspace file, never the
+  renderer). **PROVEN 2026-07-08 (clean process state, valid key):** board
+  reply metadata = `{providerID: "openai", modelID: "gpt-5.4-mini",
+  finish: "stop", tokens: 1766}` — real metered call, not the free fallback.
+  Still TODO: the approval-chip UI (the permission gate + reply API are wired;
+  the chips that surface/answer them aren't built yet).
 - **6 ✅** Voice switchboard: `send_to_agent` tool routes spoken/typed
   commands into a pane's pty or the board; dispatch logged to events.jsonl.
   Unit-tested; IPC delivery live-verified.
 
+### Verification ledger (what is / isn't proven)
+- Board runs on gpt-5.4-mini — **PROVEN** (response metadata, clean state).
+- Voice ephemeral-key mint (connect precondition) — **PROVEN** (createSession
+  returns ok + `ek_` client secret + sessionId, model gpt-realtime-2).
+- Full spoken exchange + barge-in — **NOT re-proven this build** (needs a mic +
+  real speech; manual check).
+- Approval-chip UI — **NOT built**; unblocked now that a capable model answers.
+
 ### Human-hand items before daily use
-1. `opencode /connect` → pick ChatGPT Plus/Pro (or set a local Ollama lane) so
-   the board runs on a capable model instead of the free default.
-2. `.env.local` `OPENAI_API_KEY` present (done) — needed for voice connect.
-3. Then: build the approval-chip UI (slice 5 remainder) and run the live
+1. `.env.local` `OPENAI_API_KEY` present (done, verified) — powers board model
+   + voice mint. Board bills OpenAI metered; bump `boardConfig` model to
+   `openai/gpt-5.4` if Mini's tool use proves too light.
+2. Build the approval-chip UI (slice 5 remainder) and run the live
    voice→dispatch→barge-in checklist end to end.
 
 ### Known limitation (shared, later hardening)
