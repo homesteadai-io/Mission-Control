@@ -1121,3 +1121,35 @@ td {
   place-items: center;
   background: transparent;
 }
+
+/* Draggable pane dividers (desktop-window style resize) */
+.desk-panes {
+  --divider: 8px;
+  gap: 4px;
+}
+
+.desk-divider {
+  align-self: stretch;
+  width: 8px;
+  margin: 0 -1px;
+  border-radius: 6px;
+  background: transparent;
+  cursor: col-resize;
+  transition: background 120ms ease;
+  touch-action: none;
+}
+
+.desk-divider:hover,
+body.is-resizing-desk .desk-divider {
+  background: linear-gradient(180deg, transparent, rgba(127, 212, 255, 0.55), transparent);
+}
+
+body.is-resizing-desk {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-resizing-desk .desk-pane-terminal,
+body.is-resizing-desk iframe {
+  pointer-events: none;
+}

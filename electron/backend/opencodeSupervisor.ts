@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ensureBoardConfig } from "./boardConfig.js";
+import { readOpenAiApiKey } from "./env.js";
 
 export type BoardStatus = "stopped" | "starting" | "ready" | "error";
 
@@ -49,7 +50,28 @@ function resolveOpencodeCommand(): { file: string; args: string[] } {
   return { file: "opencode", args: ["serve", "--port", String(BOARD_PORT)] };
 }
 
-export function startBoard(workspaceDir: string) {
+let projectRootForKey: string | undefined;
+
+/**
+ * Give opencode's OpenAI provider the API key WITHOUT ever writing it into the
+ * workspace opencode.json (which is drop-zone-visible / syncable). The key is
+ * read from .env.local in the main process and injected into the board child's
+ * env only. It never crosses the preload bridge to the renderer.
+ */
+function childEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (!env.OPENAI_API_KEY && projectRootForKey) {
+    try {
+      env.OPENAI_API_KEY = readOpenAiApiKey(projectRootForKey);
+    } catch {
+      // no key available — board falls back to opencode's free default model
+    }
+  }
+  return env;
+}
+
+export function startBoard(workspaceDir: string, projectRoot?: string) {
+  if (projectRoot) projectRootForKey = projectRoot;
   if (child) return;
   setStatus("starting");
 
@@ -64,7 +86,7 @@ export function startBoard(workspaceDir: string) {
   const { file, args } = resolveOpencodeCommand();
   child = spawn(file, args, {
     cwd: workspaceDir,
-    env: { ...process.env },
+    env: childEnv(),
     stdio: "ignore",
     windowsHide: true
   });

@@ -317,7 +317,7 @@ app.whenReady().then(() => {
   onBoardStatus((boardStatus, detail) => {
     mainWindow?.webContents.send("board:status-changed", boardStatus, detail ?? null);
   });
-  startBoard(workspaceDir);
+  startBoard(workspaceDir, projectRoot);
 });
 
 app.on("before-quit", () => {

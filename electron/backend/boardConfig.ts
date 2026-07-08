@@ -41,6 +41,12 @@ export function buildBoardConfig(options: BoardConfigOptions = {}) {
 
   return {
     $schema: "https://opencode.ai/config.json",
+    // GPT-5.4 Mini: cheap ($0.75/$4.50 per 1M) and good enough for the board's
+    // text-first assistant + light tool use. Bump to "openai/gpt-5.4" (full,
+    // $2.50/$15) if multi-step tool reliability ever needs it. Requires an
+    // OPENAI_API_KEY (injected by the supervisor from .env.local); without one
+    // opencode falls back to its free default model.
+    model: "openai/gpt-5.4-mini",
     permission: {
       bash: "ask",
       edit: "ask",
