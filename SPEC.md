@@ -161,3 +161,40 @@ an MCP socket; Charli becomes the operator organ with one.
 4. opencode serve supervision + board chat (text-first) on workspace tools.
 5. MCP wiring (browser, desktop) + approval chips.
 6. Voice switchboard routing + event logging.
+
+## BUILT STATE — 2026-07-08 (branch phase4/operator-desk-spec)
+
+Slices 1-4 and 6 built and live-verified. Slice 5 config half shipped;
+approval-chip UI deferred to a connected model. All checks green: typecheck,
+32 unit tests, build. Zero process orphans verified on graceful quit.
+
+- **1 ✅** Tri-pane desk shell, Charli identity strip, dark background,
+  artifacts moved to overlay so terminals never unmount.
+- **2 ✅** Real `claude`/`codex` in xterm/@lydell/node-pty panes; profiles
+  allowlisted; `taskkill /T` reaps the cmd→node→cli tree on quit (verified 0
+  orphans). Live-verified both CLIs boot.
+- **3 ✅** Shared workspace `~/MissionControl-Workspace`, drag-drop import
+  (traversal-proof, 100MB cap, collision-safe), file cards, reveal-in-folder.
+  Live-verified import + traversal rejection.
+- **4 ✅** `opencode serve` supervised on 127.0.0.1:4517 (health-gate,
+  auto-restart, tree-reap on quit); board chat text-first over its REST API.
+  Live-verified real model reply through the real UI.
+- **5 ◐** Config half shipped: opencode.json generated with bash/edit/webfetch
+  = "ask" and MCP scaffold (Keep Socket read-lane stub, disabled). opencode
+  loads it cleanly. **Approval-chip UI + live MCP need a connected capable
+  model (`opencode /connect` — Adam's ChatGPT sub); free models emit
+  incomplete tool calls so the permission path can't be exercised yet.**
+- **6 ✅** Voice switchboard: `send_to_agent` tool routes spoken/typed
+  commands into a pane's pty or the board; dispatch logged to events.jsonl.
+  Unit-tested; IPC delivery live-verified.
+
+### Human-hand items before daily use
+1. `opencode /connect` → pick ChatGPT Plus/Pro (or set a local Ollama lane) so
+   the board runs on a capable model instead of the free default.
+2. `.env.local` `OPENAI_API_KEY` present (done) — needed for voice connect.
+3. Then: build the approval-chip UI (slice 5 remainder) and run the live
+   voice→dispatch→barge-in checklist end to end.
+
+### Known limitation (shared, later hardening)
+A main-process hard crash orphans pty/opencode children (graceful quit paths
+are covered). Fix candidate: Windows Job Object with KILL_ON_JOB_CLOSE.
