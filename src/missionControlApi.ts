@@ -20,6 +20,18 @@ export interface VoiceLogEvent {
   detail?: Record<string, unknown>;
 }
 
+export type PaneProfile = "claude" | "codex";
+
+export interface TerminalApi {
+  spawn: (id: string, profile: PaneProfile, cols: number, rows: number) => Promise<{ ok: boolean; error?: string }>;
+  input: (id: string, data: string) => Promise<{ ok: boolean; error?: string }>;
+  resize: (id: string, cols: number, rows: number) => Promise<{ ok: boolean; error?: string }>;
+  kill: (id: string) => Promise<{ ok: boolean; error?: string }>;
+  isRunning: (id: string) => Promise<{ ok: boolean; running?: boolean }>;
+  onData: (callback: (id: string, data: string) => void) => () => void;
+  onExit: (callback: (id: string, exitCode: number) => void) => () => void;
+}
+
 export interface MissionControlApi {
   setWindowMode: (mode: Exclude<CockpitMode, "menu">) => Promise<{ ok: boolean; mode?: string }>;
   voice: {
@@ -27,4 +39,5 @@ export interface MissionControlApi {
     appendTranscript: (sessionId: string, entry: TranscriptEntry) => Promise<{ ok: boolean; error?: string }>;
     logEvent: (entry: VoiceLogEvent) => Promise<{ ok: boolean; error?: string }>;
   };
+  terminal: TerminalApi;
 }
