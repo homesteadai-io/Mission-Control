@@ -1,15 +1,43 @@
 import { app, BrowserWindow, ipcMain, shell, session } from "electron";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { sanitizeDetail } from "./backend/eventSanitizer.js";
 import { appendEvent, appendTranscript, type TranscriptEntry } from "./backend/eventLog.js";
 import { mintRealtimeClientSecret } from "./backend/realtimeSecrets.js";
+import {
+  killAllPanes,
+  killPane,
+  PANE_IDS,
+  PANE_PROFILES,
+  paneIsRunning,
+  resizePane,
+  spawnPane,
+  writePane,
+  type PaneProfile
+} from "./backend/ptyManager.js";
+import { importFile, isInsideWorkspace, listFiles } from "./backend/workspaceFiles.js";
+import {
+  getBoardStatus,
+  listBoardMessages,
+  listBoardPermissions,
+  onBoardStatus,
+  promptBoard,
+  replyBoardPermission,
+  resetBoardSession,
+  startBoard,
+  stopBoard
+} from "./backend/opencodeSupervisor.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 const projectRoot = process.cwd();
+
+const workspaceDir = path.join(os.homedir(), "MissionControl-Workspace");
+fs.mkdirSync(workspaceDir, { recursive: true });
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -161,6 +189,141 @@ ipcMain.handle("voice:log-event", async (_event, entry: { type: string; sessionI
   }
 });
 
+ipcMain.handle("pty:spawn", (_event, id: string, profile: PaneProfile, cols: number, rows: number) => {
+  if (!PANE_IDS.has(id) || !PANE_PROFILES.has(profile)) {
+    return { ok: false, error: "Unknown pane id or profile" };
+  }
+  const safeCols = clampInt(cols, 2, 500, 80);
+  const safeRows = clampInt(rows, 2, 500, 24);
+
+  spawnPane({
+    id,
+    profile,
+    cwd: workspaceDir,
+    cols: safeCols,
+    rows: safeRows,
+    onData: (data) => mainWindow?.webContents.send("pty:data", id, data),
+    onExit: (exitCode) => mainWindow?.webContents.send("pty:exit", id, exitCode)
+  });
+
+  void appendEvent(projectRoot, { type: "desk.pane_spawned", detail: { pane: id, profile } });
+  return { ok: true };
+});
+
+ipcMain.handle("pty:input", (_event, id: string, data: string) => {
+  if (!PANE_IDS.has(id) || typeof data !== "string" || data.length > 10_000) {
+    return { ok: false, error: "Invalid pane input" };
+  }
+  writePane(id, data);
+  return { ok: true };
+});
+
+ipcMain.handle("pty:resize", (_event, id: string, cols: number, rows: number) => {
+  if (!PANE_IDS.has(id)) return { ok: false, error: "Unknown pane id" };
+  resizePane(id, clampInt(cols, 2, 500, 80), clampInt(rows, 2, 500, 24));
+  return { ok: true };
+});
+
+ipcMain.handle("pty:kill", (_event, id: string) => {
+  if (!PANE_IDS.has(id)) return { ok: false, error: "Unknown pane id" };
+  killPane(id);
+  return { ok: true };
+});
+
+ipcMain.handle("pty:is-running", (_event, id: string) => {
+  return { ok: true, running: PANE_IDS.has(id) && paneIsRunning(id) };
+});
+
+ipcMain.handle("board:status", () => ({ ok: true, status: getBoardStatus() }));
+
+ipcMain.handle("board:prompt", async (_event, text: string) => {
+  try {
+    if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
+      throw new Error("Invalid board prompt");
+    }
+    const result = await promptBoard(text.trim());
+    await appendEvent(projectRoot, {
+      type: "desk.board_prompted",
+      sessionId: result.sessionId,
+      detail: { chars: text.trim().length }
+    });
+    return { ok: true, ...result };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Board prompt failed" };
+  }
+});
+
+ipcMain.handle("board:messages", async () => {
+  try {
+    return { ok: true, messages: await listBoardMessages() };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Board messages failed" };
+  }
+});
+
+ipcMain.handle("board:new-session", () => {
+  resetBoardSession();
+  return { ok: true };
+});
+
+ipcMain.handle("board:permissions", async () => {
+  try {
+    return { ok: true, permissions: await listBoardPermissions() };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Permission list failed" };
+  }
+});
+
+ipcMain.handle("board:reply-permission", async (_event, requestId: string, reply: string) => {
+  try {
+    if (typeof requestId !== "string" || !["once", "always", "reject"].includes(reply)) {
+      throw new Error("Invalid permission reply");
+    }
+    await replyBoardPermission(requestId, reply as "once" | "always" | "reject");
+    await appendEvent(projectRoot, { type: "desk.board_permission_reply", detail: { reply } });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Permission reply failed" };
+  }
+});
+
+ipcMain.handle("workspace:import", async (_event, rawName: string, bytes: ArrayBuffer) => {
+  try {
+    if (typeof rawName !== "string" || !(bytes instanceof ArrayBuffer)) {
+      throw new Error("Invalid import payload");
+    }
+    const info = importFile(workspaceDir, rawName, new Uint8Array(bytes));
+    await appendEvent(projectRoot, {
+      type: "desk.workspace_file_added",
+      detail: { name: info.name, size: info.size }
+    });
+    return { ok: true, file: info };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Import failed" };
+  }
+});
+
+ipcMain.handle("workspace:list", () => {
+  try {
+    return { ok: true, files: listFiles(workspaceDir), workspaceDir };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "List failed" };
+  }
+});
+
+ipcMain.handle("workspace:reveal", (_event, filePath: string) => {
+  if (typeof filePath !== "string" || !isInsideWorkspace(workspaceDir, filePath)) {
+    return { ok: false, error: "Path is outside the workspace" };
+  }
+  shell.showItemInFolder(path.resolve(filePath));
+  return { ok: true };
+});
+
+function clampInt(value: unknown, min: number, max: number, fallback: number) {
+  const n = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 function assertTranscriptEntry(entry: TranscriptEntry) {
   const validRoles = new Set(["user", "assistant", "system"]);
   const validSources = new Set(["history", "event", "renewal", "manual"]);
@@ -174,9 +337,20 @@ function assertTranscriptEntry(entry: TranscriptEntry) {
 app.whenReady().then(() => {
   installSecurityGuards();
   createWindow();
+  onBoardStatus((boardStatus, detail) => {
+    mainWindow?.webContents.send("board:status-changed", boardStatus, detail ?? null);
+  });
+  startBoard(workspaceDir, projectRoot);
+});
+
+app.on("before-quit", () => {
+  killAllPanes();
+  stopBoard();
 });
 
 app.on("window-all-closed", () => {
+  killAllPanes();
+  stopBoard();
   if (process.platform !== "darwin") app.quit();
 });
 
