@@ -14,7 +14,7 @@ export function Avatar({ state, compact = false, degradedReason }: AvatarProps) 
         <Waveform />
         {!compact ? <span>{labelForState(state, degradedReason)}</span> : null}
       </div>
-      <img src="./assets/avatar/face.png" alt="Brush-stroke Mission Control avatar" />
+      <img src="./assets/avatar/face-white.png" alt="Brush-stroke Mission Control avatar" />
     </div>
   );
 }
