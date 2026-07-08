@@ -1,6 +1,7 @@
 import {
   RealtimeAgent,
   RealtimeSession,
+  tool,
   type RealtimeItem,
   type TransportEvent
 } from "@openai/agents/realtime";
@@ -8,6 +9,7 @@ import type { AvatarState, TranscriptEntry } from "../types";
 import type { MissionControlApi } from "../missionControlApi";
 import { decideTranscriptAppend } from "./transcriptDedup";
 import { transitionAudioSession } from "./bargeIn";
+import { normalizeTarget, routeCommand, type RouteResult, type RouteTarget } from "./switchboard";
 
 export const REALTIME_MODEL = "gpt-realtime-2";
 export const SESSION_RENEWAL_MS = 50 * 60 * 1000;
@@ -74,7 +76,8 @@ export class MissionVoiceKernel {
       const instructions = minted.instructions;
       const agent = new RealtimeAgent({
         name: "Mission Control",
-        instructions
+        instructions,
+        tools: [this.#buildDispatchTool()]
       });
 
       const session = new RealtimeSession(agent, {
@@ -106,8 +109,7 @@ export class MissionVoiceKernel {
             }
           },
           parallelToolCalls: false,
-          toolChoice: "none",
-          tools: []
+          toolChoice: "auto"
         },
         workflowName: "Mission Control Voice Kernel",
         groupId: minted.sessionId
@@ -175,6 +177,53 @@ export class MissionVoiceKernel {
     return spoken
       ? `Recent voice context: ${spoken}`.slice(0, 900)
       : "No substantive user or assistant voice turns have been captured yet.";
+  }
+
+  /**
+   * Route a command to a coding pane or the board. This is the switchboard core;
+   * the voice tool calls it, and it is directly callable for verification.
+   */
+  async routeCommand(target: RouteTarget, text: string): Promise<RouteResult> {
+    const result = await routeCommand(target, text, {
+      writePane: (paneId, data) => this.#api.terminal.input(paneId, data),
+      promptBoard: (prompt) => this.#api.board.prompt(prompt),
+      logDispatch: (routedTarget, chars) => {
+        void this.#logEvent("voice.dispatch", { target: routedTarget, chars });
+      }
+    });
+    this.#appendSystemLine(result.detail);
+    return result;
+  }
+
+  #buildDispatchTool() {
+    return tool({
+      name: "send_to_agent",
+      description:
+        "Route the operator's command to a workstation: 'claude' (Claude Code pane) or 'codex' (Codex pane) types the command into that terminal and runs it; 'board' hands it to the workbench agent. Use this whenever the operator asks to send, tell, or dispatch work to one of the agents.",
+      strict: true,
+      parameters: {
+        type: "object",
+        properties: {
+          target: {
+            type: "string",
+            enum: ["claude", "codex", "board"],
+            description: "Which workstation to route to."
+          },
+          text: {
+            type: "string",
+            description: "The exact command or request to deliver."
+          }
+        },
+        required: ["target", "text"],
+        additionalProperties: false
+      },
+      execute: async (input: unknown) => {
+        const { target: rawTarget, text } = input as { target: string; text: string };
+        const target = normalizeTarget(rawTarget) ?? "board";
+        const result = await this.routeCommand(target, text);
+        return result.detail;
+      }
+    });
   }
 
   #attachSessionEvents(session: RealtimeSession) {
