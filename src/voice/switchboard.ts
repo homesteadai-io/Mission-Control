@@ -39,12 +39,26 @@ export interface SwitchboardDeps {
  * board agent. Returns a structured result the voice tool surfaces back to
  * Charli so she can confirm out loud.
  */
+/**
+ * Collapse ASCII control characters (C0 range + DEL) to spaces so a routed
+ * command can only ever be ONE submitted line — no smuggled newlines, ETX,
+ * or ANSI escape introducers reach the pty. Content is data.
+ */
+export function sanitizeCommandText(text: string) {
+  let cleaned = "";
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    cleaned += code < 0x20 || code === 0x7f ? " " : ch;
+  }
+  return cleaned.replace(/\s+/g, " ").trim();
+}
+
 export async function routeCommand(
   target: RouteTarget,
   text: string,
   deps: SwitchboardDeps
 ): Promise<RouteResult> {
-  const trimmed = text.trim();
+  const trimmed = sanitizeCommandText(text);
   if (!trimmed) {
     return { target, ok: false, detail: "Nothing to send — the command was empty." };
   }

@@ -55,4 +55,17 @@ describe("routeCommand", () => {
     const result = await routeCommand("claude", "ls", deps);
     expect(result).toEqual({ target: "claude", ok: false, detail: "pane dead" });
   });
+
+  it("collapses control characters so only one line can ever be submitted", async () => {
+    const deps = makeDeps();
+    await routeCommand("codex", "npm test\r\nrm -rf /[31mred", deps);
+    expect(deps.writePane).toHaveBeenCalledWith("codex", "npm test rm -rf / [31mred\r");
+  });
+
+  it("rejects commands that are only control characters", async () => {
+    const deps = makeDeps();
+    const result = await routeCommand("codex", "\r\n", deps);
+    expect(result.ok).toBe(false);
+    expect(deps.writePane).not.toHaveBeenCalled();
+  });
 });

@@ -99,6 +99,8 @@ async function waitForHealth() {
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
+  // Reap the unresponsive child rather than leaving it live in error state.
+  stopBoard();
   setStatus("error", "opencode serve did not become healthy in 20s");
 }
 
