@@ -45,6 +45,24 @@ export interface WorkspaceApi {
   reveal: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
+export type BoardStatus = "stopped" | "starting" | "ready" | "error";
+
+export interface BoardMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  completed: boolean;
+  model?: string;
+}
+
+export interface BoardApi {
+  status: () => Promise<{ ok: boolean; status?: BoardStatus }>;
+  prompt: (text: string) => Promise<{ ok: boolean; sessionId?: string; error?: string }>;
+  messages: () => Promise<{ ok: boolean; messages?: BoardMessage[]; error?: string }>;
+  newSession: () => Promise<{ ok: boolean }>;
+  onStatusChanged: (callback: (status: BoardStatus, detail: string | null) => void) => () => void;
+}
+
 export interface MissionControlApi {
   setWindowMode: (mode: Exclude<CockpitMode, "menu">) => Promise<{ ok: boolean; mode?: string }>;
   voice: {
@@ -54,4 +72,5 @@ export interface MissionControlApi {
   };
   terminal: TerminalApi;
   workspace: WorkspaceApi;
+  board: BoardApi;
 }

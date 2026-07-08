@@ -1035,3 +1035,69 @@ td {
 .file-card .file-reveal {
   color: #6f92a8;
 }
+
+/* Board chat */
+
+.board-status-text {
+  color: #8fb2c7;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.board-chat {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.board-bubble {
+  max-width: 92%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.board-bubble small {
+  display: block;
+  margin-top: 4px;
+  color: #6f92a8;
+  font-size: 10px;
+}
+
+.board-bubble-user {
+  justify-self: end;
+  background: rgba(72, 173, 255, 0.16);
+  border: 1px solid rgba(127, 212, 255, 0.28);
+}
+
+.board-bubble-assistant {
+  justify-self: start;
+  background: rgba(16, 26, 36, 0.9);
+  border: 1px solid rgba(142, 206, 255, 0.14);
+}
+
+.board-bubble-pending {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.workbench-composer form {
+  display: flex;
+  gap: 8px;
+}
+
+.workbench-composer form input {
+  flex: 1;
+}
+
+.workbench-composer form button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  min-height: 36px;
+  padding: 0;
+}

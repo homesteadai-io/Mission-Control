@@ -18,6 +18,17 @@ contextBridge.exposeInMainWorld("missionControl", {
     logEvent: (entry: { type: string; sessionId?: string; detail?: Record<string, unknown> }) =>
       ipcRenderer.invoke("voice:log-event", entry)
   },
+  board: {
+    status: () => ipcRenderer.invoke("board:status"),
+    prompt: (text: string) => ipcRenderer.invoke("board:prompt", text),
+    messages: () => ipcRenderer.invoke("board:messages"),
+    newSession: () => ipcRenderer.invoke("board:new-session"),
+    onStatusChanged: (callback: (status: string, detail: string | null) => void) => {
+      const handler = (_event: unknown, status: string, detail: string | null) => callback(status, detail);
+      ipcRenderer.on("board:status-changed", handler);
+      return () => ipcRenderer.removeListener("board:status-changed", handler);
+    }
+  },
   workspace: {
     importFile: (name: string, bytes: ArrayBuffer) => ipcRenderer.invoke("workspace:import", name, bytes),
     list: () => ipcRenderer.invoke("workspace:list"),

@@ -18,6 +18,15 @@ import {
   type PaneProfile
 } from "./backend/ptyManager.js";
 import { importFile, isInsideWorkspace, listFiles } from "./backend/workspaceFiles.js";
+import {
+  getBoardStatus,
+  listBoardMessages,
+  onBoardStatus,
+  promptBoard,
+  resetBoardSession,
+  startBoard,
+  stopBoard
+} from "./backend/opencodeSupervisor.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -223,6 +232,38 @@ ipcMain.handle("pty:is-running", (_event, id: string) => {
   return { ok: true, running: PANE_IDS.has(id) && paneIsRunning(id) };
 });
 
+ipcMain.handle("board:status", () => ({ ok: true, status: getBoardStatus() }));
+
+ipcMain.handle("board:prompt", async (_event, text: string) => {
+  try {
+    if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
+      throw new Error("Invalid board prompt");
+    }
+    const result = await promptBoard(text.trim());
+    await appendEvent(projectRoot, {
+      type: "desk.board_prompted",
+      sessionId: result.sessionId,
+      detail: { chars: text.trim().length }
+    });
+    return { ok: true, ...result };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Board prompt failed" };
+  }
+});
+
+ipcMain.handle("board:messages", async () => {
+  try {
+    return { ok: true, messages: await listBoardMessages() };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Board messages failed" };
+  }
+});
+
+ipcMain.handle("board:new-session", () => {
+  resetBoardSession();
+  return { ok: true };
+});
+
 ipcMain.handle("workspace:import", async (_event, rawName: string, bytes: ArrayBuffer) => {
   try {
     if (typeof rawName !== "string" || !(bytes instanceof ArrayBuffer)) {
@@ -273,14 +314,20 @@ function assertTranscriptEntry(entry: TranscriptEntry) {
 app.whenReady().then(() => {
   installSecurityGuards();
   createWindow();
+  onBoardStatus((boardStatus, detail) => {
+    mainWindow?.webContents.send("board:status-changed", boardStatus, detail ?? null);
+  });
+  startBoard(workspaceDir);
 });
 
 app.on("before-quit", () => {
   killAllPanes();
+  stopBoard();
 });
 
 app.on("window-all-closed", () => {
   killAllPanes();
+  stopBoard();
   if (process.platform !== "darwin") app.quit();
 });
 
