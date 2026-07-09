@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, session } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, shell, session } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,8 +12,10 @@ import {
   PANE_IDS,
   PANE_PROFILES,
   paneIsRunning,
+  readPaneTail,
   resizePane,
   spawnPane,
+  submitPaneLine,
   writePane,
   type PaneProfile
 } from "./backend/ptyManager.js";
@@ -88,6 +90,27 @@ function createWindow() {
       void shell.openExternal(url);
     }
     return { action: "deny" };
+  });
+
+  // Right-click clipboard menu. Electron ships no default context menu, so
+  // right-click Paste (and Cut/Copy) never worked in the text boxes or the
+  // xterm terminals. These role-based items act on the focused element —
+  // Paste into an <input> or the focused terminal's textarea (which xterm
+  // forwards to the pty).
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    const canEdit = params.isEditable;
+    const hasSelection = params.selectionText.trim().length > 0;
+    if (!canEdit && !hasSelection) return;
+
+    const template: Electron.MenuItemConstructorOptions[] = [];
+    if (canEdit) template.push({ role: "cut", enabled: params.editFlags.canCut });
+    if (canEdit || hasSelection) template.push({ role: "copy", enabled: params.editFlags.canCopy });
+    if (canEdit) template.push({ role: "paste", enabled: params.editFlags.canPaste });
+    if (canEdit) {
+      template.push({ type: "separator" });
+      template.push({ role: "selectAll" });
+    }
+    Menu.buildFromTemplate(template).popup({ window: mainWindow ?? undefined });
   });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
@@ -216,6 +239,21 @@ ipcMain.handle("pty:input", (_event, id: string, data: string) => {
   }
   writePane(id, data);
   return { ok: true };
+});
+
+ipcMain.handle("pty:submit-line", async (_event, id: string, text: string) => {
+  if (!PANE_IDS.has(id) || typeof text !== "string" || text.length > 10_000) {
+    return { ok: false, error: "Invalid pane submit" };
+  }
+  const ok = await submitPaneLine(id, text);
+  return ok ? { ok: true } : { ok: false, error: `The ${id} pane is not running.` };
+});
+
+ipcMain.handle("pty:read-recent", (_event, id: string, maxChars?: number) => {
+  if (!PANE_IDS.has(id)) return { ok: false, error: "Unknown pane id" };
+  if (!paneIsRunning(id)) return { ok: false, error: `The ${id} pane is not running.` };
+  const cap = typeof maxChars === "number" ? clampInt(maxChars, 200, 8000, 2000) : 2000;
+  return { ok: true, text: readPaneTail(id, cap) };
 });
 
 ipcMain.handle("pty:resize", (_event, id: string, cols: number, rows: number) => {

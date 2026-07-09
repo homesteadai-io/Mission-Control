@@ -1234,3 +1234,46 @@ body.is-resizing-desk iframe {
   background: rgba(255, 157, 157, 0.14);
   color: #ffc4c4;
 }
+
+/* Menu overlay: tool surfaces are a status board, not clickable actions */
+.menu-hint {
+  margin: 0 0 12px;
+  color: #8fb2c7;
+  font-size: 12px;
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(142, 206, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(10, 18, 26, 0.55);
+}
+
+.tool-row span {
+  color: #dcecf8;
+  font-size: 13px;
+}
+
+.tool-row small {
+  color: #8fb2c7;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.tool-row[data-status="active"] small {
+  color: #6fe3a1;
+}
+
+.tool-row[data-status="planned"] small {
+  color: #ffd9a3;
+}
+
+.tool-row[data-status="stub"] small {
+  color: #8fb2c7;
+}

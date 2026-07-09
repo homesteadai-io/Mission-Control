@@ -12,9 +12,52 @@ export const PANE_PROFILES = new Set<PaneProfile>(["claude", "codex"]);
 interface ManagedPane {
   proc: IPty;
   profile: PaneProfile;
+  buffer: string;
 }
 
 const panes = new Map<string, ManagedPane>();
+
+// Keep the tail of each pane's raw output so Charli can read an agent's recent
+// activity back (she can dispatch but otherwise couldn't see the reply).
+const BUFFER_LIMIT = 24_000;
+
+/**
+ * Strip ANSI escapes (OSC, CSI, and other Fe/nF escapes) and collapse blank
+ * runs so the tail reads as plain text Charli can speak. Order matters: OSC is
+ * removed first because it ends in an ST (ESC \) that the other branches would
+ * otherwise partially match and eat an adjacent character.
+ */
+export function cleanTerminalText(raw: string) {
+  return (
+    raw
+      // OSC: ESC ] ... terminated by BEL or ST (ESC \). Window titles (OSC 0/2)
+      // and hyperlinks (OSC 8) that Ink TUIs emit.
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
+      // CSI: ESC [ params(0x30-3f) intermediates(0x20-2f) final(0x40-7e).
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]/g, "")
+      // Other escapes: charset selects (ESC(B), Fe/nF singles.
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b[\x20-\x2f]*[\x30-\x7e]/g, "")
+      // Any stray ESC left over.
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b/g, "")
+      .replace(/\r/g, "")
+      // Remaining C0 controls except tab (09) and newline (0a), plus DEL (7f).
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "")
+      .replace(/[^\S\n]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
+export function readPaneTail(id: string, maxChars = 2000): string {
+  const pane = panes.get(id);
+  if (!pane) return "";
+  return cleanTerminalText(pane.buffer).slice(-Math.max(200, maxChars));
+}
 
 interface SpawnPaneOptions {
   id: string;
@@ -57,17 +100,48 @@ export function spawnPane(options: SpawnPaneOptions) {
     env: { ...process.env } as Record<string, string>
   });
 
-  proc.onData(options.onData);
+  const managed: ManagedPane = { proc, profile: options.profile, buffer: "" };
+
+  proc.onData((data) => {
+    managed.buffer = (managed.buffer + data).slice(-BUFFER_LIMIT);
+    options.onData(data);
+  });
   proc.onExit(({ exitCode }) => {
     panes.delete(options.id);
     options.onExit(exitCode);
   });
 
-  panes.set(options.id, { proc, profile: options.profile });
+  panes.set(options.id, managed);
 }
 
 export function writePane(id: string, data: string) {
   panes.get(id)?.proc.write(data);
+}
+
+/**
+ * Submit a line to an interactive TUI (Claude Code / Codex). Writing
+ * `text\r` in one chunk lets Ink-style TUIs treat the whole thing as a paste
+ * and NOT submit. Writing the text, then the carriage return as a separate
+ * write a tick later, makes the CR register as a distinct Enter keypress.
+ */
+export function submitPaneLine(id: string, text: string): Promise<boolean> {
+  const pane = panes.get(id);
+  if (!pane) return Promise.resolve(false);
+  pane.proc.write(text);
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Re-fetch and compare identity: guards against the pane exiting OR being
+      // respawned under the same fixed id within the 60ms window.
+      const current = panes.get(id);
+      if (!current || current !== pane) return resolve(false);
+      try {
+        current.proc.write("\r");
+        resolve(true);
+      } catch {
+        resolve(false);
+      }
+    }, 60);
+  });
 }
 
 export function resizePane(id: string, cols: number, rows: number) {

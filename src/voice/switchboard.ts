@@ -29,7 +29,7 @@ export function isPaneTarget(target: RouteTarget): boolean {
  * unit-tested with fakes and driven from the voice kernel with the real bridge.
  */
 export interface SwitchboardDeps {
-  writePane: (paneId: "claude" | "codex", data: string) => Promise<{ ok: boolean; error?: string }>;
+  submitToPane: (paneId: "claude" | "codex", text: string) => Promise<{ ok: boolean; error?: string }>;
   promptBoard: (text: string) => Promise<{ ok: boolean; error?: string }>;
   logDispatch: (target: RouteTarget, chars: number) => void;
 }
@@ -65,10 +65,12 @@ export async function routeCommand(
 
   if (isPaneTarget(target)) {
     const paneId = target as "claude" | "codex";
-    const result = await deps.writePane(paneId, `${trimmed}\r`);
+    // Two-step submit (text, then Enter) so the TUI runs it instead of leaving
+    // it as a draft paste. sanitizeCommandText already stripped the CR.
+    const result = await deps.submitToPane(paneId, trimmed);
     deps.logDispatch(target, trimmed.length);
     return result.ok
-      ? { target, ok: true, detail: `Sent to ${label(target)}.` }
+      ? { target, ok: true, detail: `Sent to ${label(target)}. Ask me to read it back in a moment to see the reply.` }
       : { target, ok: false, detail: result.error ?? `Could not reach the ${label(target)} pane.` };
   }
 

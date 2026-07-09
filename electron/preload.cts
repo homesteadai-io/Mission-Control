@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld("missionControl", {
     spawn: (id: string, profile: string, cols: number, rows: number) =>
       ipcRenderer.invoke("pty:spawn", id, profile, cols, rows),
     input: (id: string, data: string) => ipcRenderer.invoke("pty:input", id, data),
+    submitLine: (id: string, text: string) => ipcRenderer.invoke("pty:submit-line", id, text),
+    readRecent: (id: string, maxChars?: number) => ipcRenderer.invoke("pty:read-recent", id, maxChars),
     resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke("pty:resize", id, cols, rows),
     kill: (id: string) => ipcRenderer.invoke("pty:kill", id),
     isRunning: (id: string) => ipcRenderer.invoke("pty:is-running", id),

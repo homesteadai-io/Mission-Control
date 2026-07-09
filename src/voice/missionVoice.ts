@@ -77,7 +77,7 @@ export class MissionVoiceKernel {
       const agent = new RealtimeAgent({
         name: "Mission Control",
         instructions,
-        tools: [this.#buildDispatchTool()]
+        tools: [this.#buildDispatchTool(), this.#buildReadAgentTool()]
       });
 
       const session = new RealtimeSession(agent, {
@@ -185,7 +185,7 @@ export class MissionVoiceKernel {
    */
   async routeCommand(target: RouteTarget, text: string): Promise<RouteResult> {
     const result = await routeCommand(target, text, {
-      writePane: (paneId, data) => this.#api.terminal.input(paneId, data),
+      submitToPane: (paneId, line) => this.#api.terminal.submitLine(paneId, line),
       promptBoard: (prompt) => this.#api.board.prompt(prompt),
       logDispatch: (routedTarget, chars) => {
         void this.#logEvent("voice.dispatch", { target: routedTarget, chars });
@@ -193,6 +193,21 @@ export class MissionVoiceKernel {
     });
     this.#appendSystemLine(result.detail);
     return result;
+  }
+
+  /** Read an agent's recent output so Charli can report status or a reply. */
+  async readAgent(target: RouteTarget): Promise<string> {
+    if (target === "board") {
+      const result = await this.#api.board.messages();
+      if (!result.ok || !result.messages?.length) return "The workbench has no messages yet.";
+      const lastAssistant = [...result.messages].reverse().find((m) => m.role === "assistant" && m.text.trim());
+      return lastAssistant?.text?.slice(-2000) ?? "The workbench agent hasn't replied yet.";
+    }
+    const paneId = target as "claude" | "codex";
+    const result = await this.#api.terminal.readRecent(paneId, 2000);
+    if (!result.ok) return result.error ?? `The ${paneId} pane is unavailable.`;
+    const text = (result.text ?? "").trim();
+    return text || `The ${paneId} pane has produced no output yet.`;
   }
 
   #buildDispatchTool() {
@@ -222,6 +237,32 @@ export class MissionVoiceKernel {
         const target = normalizeTarget(rawTarget) ?? "board";
         const result = await this.routeCommand(target, text);
         return result.detail;
+      }
+    });
+  }
+
+  #buildReadAgentTool() {
+    return tool({
+      name: "read_agent",
+      description:
+        "Read an agent's most recent output so you can report its status or relay its reply. 'claude' = Claude Code pane, 'codex' = Codex pane, 'board' = the workbench agent. Use this whenever the operator asks what an agent said, its status, whether it's ready, or to check on dispatched work. After sending a command with send_to_agent, wait a moment, then read_agent to see the result.",
+      strict: true,
+      parameters: {
+        type: "object",
+        properties: {
+          target: {
+            type: "string",
+            enum: ["claude", "codex", "board"],
+            description: "Which workstation to read from."
+          }
+        },
+        required: ["target"],
+        additionalProperties: false
+      },
+      execute: async (input: unknown) => {
+        const { target: rawTarget } = input as { target: string };
+        const target = normalizeTarget(rawTarget) ?? "board";
+        return this.readAgent(target);
       }
     });
   }

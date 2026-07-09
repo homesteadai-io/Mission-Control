@@ -25,6 +25,8 @@ export type PaneProfile = "claude" | "codex";
 export interface TerminalApi {
   spawn: (id: string, profile: PaneProfile, cols: number, rows: number) => Promise<{ ok: boolean; error?: string }>;
   input: (id: string, data: string) => Promise<{ ok: boolean; error?: string }>;
+  submitLine: (id: string, text: string) => Promise<{ ok: boolean; error?: string }>;
+  readRecent: (id: string, maxChars?: number) => Promise<{ ok: boolean; text?: string; error?: string }>;
   resize: (id: string, cols: number, rows: number) => Promise<{ ok: boolean; error?: string }>;
   kill: (id: string) => Promise<{ ok: boolean; error?: string }>;
   isRunning: (id: string) => Promise<{ ok: boolean; running?: boolean }>;

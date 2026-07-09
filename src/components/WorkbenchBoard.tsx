@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { Check, FileText, FolderOpen, Image as ImageIcon, Send, ShieldAlert, UploadCloud, X } from "lucide-react";
+import {
+  Check,
+  FileText,
+  FolderOpen,
+  Image as ImageIcon,
+  MessageSquarePlus,
+  Send,
+  ShieldAlert,
+  UploadCloud,
+  X
+} from "lucide-react";
 import type { BoardMessage, BoardPermission, BoardStatus, PermissionReply, WorkspaceFileInfo } from "../missionControlApi";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"]);
@@ -79,6 +89,14 @@ export function WorkbenchBoard() {
       const refreshed = await board.permissions();
       if (refreshed.ok && refreshed.permissions) setPermissions(refreshed.permissions);
     }
+  };
+
+  const startNewSession = async () => {
+    if (!board) return;
+    await board.newSession();
+    setMessages([]);
+    setPermissions([]);
+    setNotice(null);
   };
 
   const refreshMessages = async () => {
@@ -164,6 +182,16 @@ export function WorkbenchBoard() {
         <span className={`pane-status pane-status-${boardStatusToDot(boardStatus)}`} aria-hidden="true" />
         <h2>Workbench</h2>
         <small className="board-status-text">{statusDetail ?? boardStatusLabel(boardStatus)}</small>
+        <div className="pane-actions">
+          <button
+            onClick={() => void startNewSession()}
+            title="Start a fresh board conversation"
+            aria-label="New board session"
+            disabled={boardStatus !== "ready" || awaitingReply}
+          >
+            <MessageSquarePlus size={14} />
+          </button>
+        </div>
       </header>
 
       <div className="workbench-feed" ref={feedRef}>

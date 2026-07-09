@@ -17,7 +17,7 @@ describe("normalizeTarget", () => {
 
 function makeDeps(overrides: Partial<SwitchboardDeps> = {}): SwitchboardDeps {
   return {
-    writePane: vi.fn().mockResolvedValue({ ok: true }),
+    submitToPane: vi.fn().mockResolvedValue({ ok: true }),
     promptBoard: vi.fn().mockResolvedValue({ ok: true }),
     logDispatch: vi.fn(),
     ...overrides
@@ -25,12 +25,13 @@ function makeDeps(overrides: Partial<SwitchboardDeps> = {}): SwitchboardDeps {
 }
 
 describe("routeCommand", () => {
-  it("types into a coding pane with a trailing carriage return and submits", async () => {
+  it("submits a coding-pane command via the two-step submit (text, then Enter)", async () => {
     const deps = makeDeps();
     const result = await routeCommand("codex", "npm test", deps);
-    expect(deps.writePane).toHaveBeenCalledWith("codex", "npm test\r");
+    expect(deps.submitToPane).toHaveBeenCalledWith("codex", "npm test");
     expect(deps.promptBoard).not.toHaveBeenCalled();
-    expect(result).toEqual({ target: "codex", ok: true, detail: "Sent to Codex." });
+    expect(result.target).toBe("codex");
+    expect(result.ok).toBe(true);
     expect(deps.logDispatch).toHaveBeenCalledWith("codex", 8);
   });
 
@@ -38,7 +39,7 @@ describe("routeCommand", () => {
     const deps = makeDeps();
     const result = await routeCommand("board", "summarize the dropped PDF", deps);
     expect(deps.promptBoard).toHaveBeenCalledWith("summarize the dropped PDF");
-    expect(deps.writePane).not.toHaveBeenCalled();
+    expect(deps.submitToPane).not.toHaveBeenCalled();
     expect(result.ok).toBe(true);
   });
 
@@ -46,26 +47,27 @@ describe("routeCommand", () => {
     const deps = makeDeps();
     const result = await routeCommand("claude", "   ", deps);
     expect(result.ok).toBe(false);
-    expect(deps.writePane).not.toHaveBeenCalled();
+    expect(deps.submitToPane).not.toHaveBeenCalled();
     expect(deps.logDispatch).not.toHaveBeenCalled();
   });
 
   it("surfaces a pane failure back to the caller", async () => {
-    const deps = makeDeps({ writePane: vi.fn().mockResolvedValue({ ok: false, error: "pane dead" }) });
+    const deps = makeDeps({ submitToPane: vi.fn().mockResolvedValue({ ok: false, error: "pane dead" }) });
     const result = await routeCommand("claude", "ls", deps);
     expect(result).toEqual({ target: "claude", ok: false, detail: "pane dead" });
   });
 
   it("collapses control characters so only one line can ever be submitted", async () => {
     const deps = makeDeps();
-    await routeCommand("codex", "npm test\r\nrm -rf /[31mred", deps);
-    expect(deps.writePane).toHaveBeenCalledWith("codex", "npm test rm -rf / [31mred\r");
+    await routeCommand("codex", "npm test\r\nrm -rf /\x1b[31mred", deps);
+    // control chars collapsed to spaces; no raw CR reaches the pane (Enter is separate)
+    expect(deps.submitToPane).toHaveBeenCalledWith("codex", "npm test rm -rf / [31mred");
   });
 
   it("rejects commands that are only control characters", async () => {
     const deps = makeDeps();
-    const result = await routeCommand("codex", "\r\n", deps);
+    const result = await routeCommand("codex", "\r\n", deps);
     expect(result.ok).toBe(false);
-    expect(deps.writePane).not.toHaveBeenCalled();
+    expect(deps.submitToPane).not.toHaveBeenCalled();
   });
 });
