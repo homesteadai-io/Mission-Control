@@ -127,7 +127,7 @@ export function App() {
           <div className="desk-identity-text">
             <h1>Charli</h1>
             <span className={`desk-state desk-state-${avatarState}`}>
-              {degradedReason ?? stateLabel(avatarState)}
+              {degradedReason ?? describeVoiceState(avatarState, voiceSnapshot)}
             </span>
           </div>
         </div>
@@ -141,7 +141,11 @@ export function App() {
             <Radio size={14} />
             {voiceSnapshot.connecting ? "Connecting" : voiceSnapshot.connected ? "Disconnect" : "Connect"}
           </button>
-          <button onClick={toggleAlwaysListening} className={voiceSnapshot.alwaysListening ? "is-active" : ""}>
+          <button
+            onClick={toggleAlwaysListening}
+            className={voiceSnapshot.alwaysListening ? "is-active" : ""}
+            title="Always listening: mic streams continuously while connected. Off = muted until you use Hold."
+          >
             {voiceSnapshot.alwaysListening ? <Mic size={14} /> : <MicOff size={14} />}
             Always
           </button>
@@ -153,6 +157,7 @@ export function App() {
             onMouseLeave={stopPushToTalk}
             onTouchStart={startPushToTalk}
             onTouchEnd={stopPushToTalk}
+            title="Press and HOLD while speaking (walkie-talkie). Only active when connected with Always off."
           >
             <Volume2 size={14} />
             Hold
@@ -246,4 +251,19 @@ function stateLabel(state: AvatarState) {
     case "degraded":
       return "Connection needs attention";
   }
+}
+
+/**
+ * "idle" is ambiguous: it renders both when disconnected AND when connected
+ * with the mic muted (Always off). Disambiguate so muting doesn't read as
+ * "off" — the session is still open; the mic just isn't streaming.
+ */
+function describeVoiceState(state: AvatarState, snapshot: MissionVoiceSnapshot) {
+  if (state === "idle" && snapshot.connected) {
+    return "Connected — mic muted (hold Hold to talk)";
+  }
+  if (state === "idle" && !snapshot.connected) {
+    return "Standing by — not connected";
+  }
+  return stateLabel(state);
 }
