@@ -72,6 +72,41 @@ export function TerminalPane({ paneId, profile, title }: TerminalPaneProps) {
       void bridge.input(paneId, data);
     });
 
+    // Terminal-convention clipboard (VS Code style): right-click copies the
+    // selection if there is one, otherwise pastes. term.paste() honors
+    // bracketed-paste mode, which Ink TUIs like Claude Code enable — writing
+    // raw bytes to the pty does not, which is why paste was flaky before.
+    const clip = window.missionControl?.clipboard;
+    const onContextMenu = (event: MouseEvent) => {
+      if (!clip) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (term.hasSelection()) {
+        void clip.writeText(term.getSelection());
+        term.clearSelection();
+        return;
+      }
+      void clip.readText().then((result) => {
+        if (result.ok && result.text) term.paste(result.text);
+      });
+    };
+    container.addEventListener("contextmenu", onContextMenu);
+
+    term.attachCustomKeyEventHandler((event) => {
+      if (!clip || event.type !== "keydown") return true;
+      if (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === "v") {
+        void clip.readText().then((result) => {
+          if (result.ok && result.text) term.paste(result.text);
+        });
+        return false;
+      }
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c" && term.hasSelection()) {
+        void clip.writeText(term.getSelection());
+        return false;
+      }
+      return true;
+    });
+
     const resizeObserver = new ResizeObserver(() => {
       if (!fitRef.current || !termRef.current) return;
       fitRef.current.fit();
@@ -87,6 +122,7 @@ export function TerminalPane({ paneId, profile, title }: TerminalPaneProps) {
       offExit();
       inputDisposable.dispose();
       resizeObserver.disconnect();
+      container.removeEventListener("contextmenu", onContextMenu);
       term.dispose();
       termRef.current = null;
       fitRef.current = null;

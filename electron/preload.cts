@@ -56,5 +56,9 @@ contextBridge.exposeInMainWorld("missionControl", {
       ipcRenderer.on("pty:exit", handler);
       return () => ipcRenderer.removeListener("pty:exit", handler);
     }
+  },
+  clipboard: {
+    readText: () => ipcRenderer.invoke("clipboard:read-text"),
+    writeText: (text: string) => ipcRenderer.invoke("clipboard:write-text", text)
   }
 });
