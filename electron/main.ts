@@ -334,14 +334,28 @@ function assertTranscriptEntry(entry: TranscriptEntry) {
   if (typeof entry.text !== "string") throw new Error("Invalid transcript text");
 }
 
-app.whenReady().then(() => {
-  installSecurityGuards();
-  createWindow();
-  onBoardStatus((boardStatus, detail) => {
-    mainWindow?.webContents.send("board:status-changed", boardStatus, detail ?? null);
+// Single-instance lock: a second launch (e.g. double-clicking the desktop
+// shortcut while Charli is already open) focuses the existing window instead
+// of spawning a rival that would collide on the board port.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
   });
-  startBoard(workspaceDir, projectRoot);
-});
+
+  app.whenReady().then(() => {
+    installSecurityGuards();
+    createWindow();
+    onBoardStatus((boardStatus, detail) => {
+      mainWindow?.webContents.send("board:status-changed", boardStatus, detail ?? null);
+    });
+    startBoard(workspaceDir, projectRoot);
+  });
+}
 
 app.on("before-quit", () => {
   killAllPanes();
