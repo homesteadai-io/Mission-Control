@@ -12,8 +12,10 @@ import {
   PANE_IDS,
   PANE_PROFILES,
   paneIsRunning,
+  readPaneTail,
   resizePane,
   spawnPane,
+  submitPaneLine,
   writePane,
   type PaneProfile
 } from "./backend/ptyManager.js";
@@ -216,6 +218,21 @@ ipcMain.handle("pty:input", (_event, id: string, data: string) => {
   }
   writePane(id, data);
   return { ok: true };
+});
+
+ipcMain.handle("pty:submit-line", async (_event, id: string, text: string) => {
+  if (!PANE_IDS.has(id) || typeof text !== "string" || text.length > 10_000) {
+    return { ok: false, error: "Invalid pane submit" };
+  }
+  const ok = await submitPaneLine(id, text);
+  return ok ? { ok: true } : { ok: false, error: `The ${id} pane is not running.` };
+});
+
+ipcMain.handle("pty:read-recent", (_event, id: string, maxChars?: number) => {
+  if (!PANE_IDS.has(id)) return { ok: false, error: "Unknown pane id" };
+  if (!paneIsRunning(id)) return { ok: false, error: `The ${id} pane is not running.` };
+  const cap = typeof maxChars === "number" ? clampInt(maxChars, 200, 8000, 2000) : 2000;
+  return { ok: true, text: readPaneTail(id, cap) };
 });
 
 ipcMain.handle("pty:resize", (_event, id: string, cols: number, rows: number) => {

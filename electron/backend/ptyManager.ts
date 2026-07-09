@@ -12,9 +12,33 @@ export const PANE_PROFILES = new Set<PaneProfile>(["claude", "codex"]);
 interface ManagedPane {
   proc: IPty;
   profile: PaneProfile;
+  buffer: string;
 }
 
 const panes = new Map<string, ManagedPane>();
+
+// Keep the tail of each pane's raw output so Charli can read an agent's recent
+// activity back (she can dispatch but otherwise couldn't see the reply).
+const BUFFER_LIMIT = 24_000;
+
+// eslint-disable-next-line no-control-regex
+const ANSI_PATTERN = /[][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+
+/** Strip ANSI escapes and collapse blank runs so the tail reads as plain text. */
+export function cleanTerminalText(raw: string) {
+  return raw
+    .replace(ANSI_PATTERN, "")
+    .replace(/\r/g, "")
+    .replace(/[^\S\n]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function readPaneTail(id: string, maxChars = 2000): string {
+  const pane = panes.get(id);
+  if (!pane) return "";
+  return cleanTerminalText(pane.buffer).slice(-Math.max(200, maxChars));
+}
 
 interface SpawnPaneOptions {
   id: string;
@@ -57,17 +81,41 @@ export function spawnPane(options: SpawnPaneOptions) {
     env: { ...process.env } as Record<string, string>
   });
 
-  proc.onData(options.onData);
+  const managed: ManagedPane = { proc, profile: options.profile, buffer: "" };
+
+  proc.onData((data) => {
+    managed.buffer = (managed.buffer + data).slice(-BUFFER_LIMIT);
+    options.onData(data);
+  });
   proc.onExit(({ exitCode }) => {
     panes.delete(options.id);
     options.onExit(exitCode);
   });
 
-  panes.set(options.id, { proc, profile: options.profile });
+  panes.set(options.id, managed);
 }
 
 export function writePane(id: string, data: string) {
   panes.get(id)?.proc.write(data);
+}
+
+/**
+ * Submit a line to an interactive TUI (Claude Code / Codex). Writing
+ * `text\r` in one chunk lets Ink-style TUIs treat the whole thing as a paste
+ * and NOT submit. Writing the text, then the carriage return as a separate
+ * write a tick later, makes the CR register as a distinct Enter keypress.
+ */
+export function submitPaneLine(id: string, text: string): Promise<boolean> {
+  const pane = panes.get(id);
+  if (!pane) return Promise.resolve(false);
+  pane.proc.write(text);
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      if (!panes.has(id)) return resolve(false);
+      pane.proc.write("\r");
+      resolve(true);
+    }, 60);
+  });
 }
 
 export function resizePane(id: string, cols: number, rows: number) {
