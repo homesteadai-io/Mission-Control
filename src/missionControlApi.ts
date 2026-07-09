@@ -68,6 +68,8 @@ export type PermissionReply = "once" | "always" | "reject";
 export interface BoardApi {
   status: () => Promise<{ ok: boolean; status?: BoardStatus }>;
   prompt: (text: string) => Promise<{ ok: boolean; sessionId?: string; error?: string }>;
+  /** Prompt AND wait for the board's reply text (voice conversation path). */
+  ask: (text: string) => Promise<{ ok: boolean; reply?: string | null; error?: string }>;
   messages: () => Promise<{ ok: boolean; messages?: BoardMessage[]; error?: string }>;
   newSession: () => Promise<{ ok: boolean }>;
   permissions: () => Promise<{ ok: boolean; permissions?: BoardPermission[]; error?: string }>;

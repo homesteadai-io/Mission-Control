@@ -24,6 +24,7 @@ import {
   getBoardStatus,
   listBoardMessages,
   listBoardPermissions,
+  askBoard,
   onBoardStatus,
   promptBoard,
   recordWorkspaceDrop,
@@ -318,6 +319,18 @@ ipcMain.handle("board:messages", async () => {
 ipcMain.handle("board:new-session", () => {
   resetBoardSession();
   return { ok: true };
+});
+
+ipcMain.handle("board:ask", async (_event, text: string) => {
+  try {
+    if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
+      throw new Error("Invalid board ask");
+    }
+    const reply = await askBoard(text.trim());
+    return { ok: true, reply };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Board ask failed" };
+  }
 });
 
 ipcMain.handle("board:permissions", async () => {

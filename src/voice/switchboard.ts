@@ -30,7 +30,7 @@ export function isPaneTarget(target: RouteTarget): boolean {
  */
 export interface SwitchboardDeps {
   submitToPane: (paneId: "claude" | "codex", text: string) => Promise<{ ok: boolean; error?: string }>;
-  promptBoard: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  askBoard: (text: string) => Promise<{ ok: boolean; reply?: string | null; error?: string }>;
   logDispatch: (target: RouteTarget, chars: number) => void;
 }
 
@@ -74,11 +74,22 @@ export async function routeCommand(
       : { target, ok: false, detail: result.error ?? `Could not reach the ${label(target)} pane.` };
   }
 
-  const result = await deps.promptBoard(trimmed);
+  const result = await deps.askBoard(trimmed);
   deps.logDispatch(target, trimmed.length);
-  return result.ok
-    ? { target, ok: true, detail: "Handed to the workbench agent." }
-    : { target, ok: false, detail: result.error ?? "The workbench agent is unavailable." };
+  if (!result.ok) {
+    return { target, ok: false, detail: result.error ?? "The workbench agent is unavailable." };
+  }
+  if (!result.reply) {
+    return {
+      target,
+      ok: true,
+      detail: "The workbench agent is still working — ask me to check the board in a moment."
+    };
+  }
+  // Cap what flows back into the realtime context; the full text stays on the
+  // board feed.
+  const reply = result.reply.length > 600 ? `${result.reply.slice(0, 600)}…` : result.reply;
+  return { target, ok: true, detail: `Workbench agent replied: ${reply}` };
 }
 
 function label(target: RouteTarget) {
