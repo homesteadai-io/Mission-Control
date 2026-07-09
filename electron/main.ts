@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, session } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, shell, session } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -90,6 +90,27 @@ function createWindow() {
       void shell.openExternal(url);
     }
     return { action: "deny" };
+  });
+
+  // Right-click clipboard menu. Electron ships no default context menu, so
+  // right-click Paste (and Cut/Copy) never worked in the text boxes or the
+  // xterm terminals. These role-based items act on the focused element —
+  // Paste into an <input> or the focused terminal's textarea (which xterm
+  // forwards to the pty).
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    const canEdit = params.isEditable;
+    const hasSelection = params.selectionText.trim().length > 0;
+    if (!canEdit && !hasSelection) return;
+
+    const template: Electron.MenuItemConstructorOptions[] = [];
+    if (canEdit) template.push({ role: "cut", enabled: params.editFlags.canCut });
+    if (canEdit || hasSelection) template.push({ role: "copy", enabled: params.editFlags.canCopy });
+    if (canEdit) template.push({ role: "paste", enabled: params.editFlags.canPaste });
+    if (canEdit) {
+      template.push({ type: "separator" });
+      template.push({ role: "selectAll" });
+    }
+    Menu.buildFromTemplate(template).popup({ window: mainWindow ?? undefined });
   });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {

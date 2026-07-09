@@ -18,15 +18,16 @@ export function MenuOverlay({ groups, onClose }: MenuOverlayProps) {
             <X size={18} />
           </button>
         </header>
+        <p className="menu-hint">This is a status board of Charli's tool surfaces — not clickable actions.</p>
         <div className="tool-groups">
           {groups.map((group) => (
             <div className="tool-group" key={group.group}>
               <h3>{group.group}</h3>
               {group.tools.map((tool) => (
-                <button key={tool.name} disabled={tool.status !== "active"} aria-disabled={tool.status !== "active"}>
+                <div className="tool-row" key={tool.name} data-status={tool.status}>
                   <span>{tool.name}</span>
                   <small>{tool.status}</small>
-                </button>
+                </div>
               ))}
             </div>
           ))}

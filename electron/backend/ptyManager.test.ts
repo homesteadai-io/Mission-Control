@@ -21,4 +21,22 @@ describe("cleanTerminalText", () => {
     const out = cleanTerminalText(raw);
     expect(out).toBe("Welcome back Adam!\nOpus 4.8 with me…");
   });
+
+  it("strips OSC window-title sequences (BEL-terminated)", () => {
+    expect(cleanTerminalText("\x1b]0;✳ Claude Code\x07Ready")).toBe("Ready");
+  });
+
+  it("strips OSC 8 hyperlinks and keeps the link text", () => {
+    expect(cleanTerminalText("\x1b]8;;https://example.com\x07link text\x1b]8;;\x07")).toBe("link text");
+  });
+
+  it("strips ST-terminated OSC without eating the next character", () => {
+    expect(cleanTerminalText("\x1b]0;title\x1b\\Ready")).toBe("Ready");
+  });
+
+  it("strips CSI finals the old terminator set missed (DCH, ICH, cursor save)", () => {
+    expect(cleanTerminalText("\x1b[2Pgo")).toBe("go");
+    expect(cleanTerminalText("\x1b[3@go")).toBe("go");
+    expect(cleanTerminalText("\x1b[sgo\x1b[u")).toBe("go");
+  });
 });
