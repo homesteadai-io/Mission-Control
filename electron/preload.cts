@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("missionControl", {
   board: {
     status: () => ipcRenderer.invoke("board:status"),
     prompt: (text: string) => ipcRenderer.invoke("board:prompt", text),
+    ask: (text: string) => ipcRenderer.invoke("board:ask", text),
     messages: () => ipcRenderer.invoke("board:messages"),
     newSession: () => ipcRenderer.invoke("board:new-session"),
     permissions: () => ipcRenderer.invoke("board:permissions"),

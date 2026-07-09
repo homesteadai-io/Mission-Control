@@ -186,7 +186,7 @@ export class MissionVoiceKernel {
   async routeCommand(target: RouteTarget, text: string): Promise<RouteResult> {
     const result = await routeCommand(target, text, {
       submitToPane: (paneId, line) => this.#api.terminal.submitLine(paneId, line),
-      promptBoard: (prompt) => this.#api.board.prompt(prompt),
+      askBoard: (prompt) => this.#api.board.ask(prompt),
       logDispatch: (routedTarget, chars) => {
         void this.#logEvent("voice.dispatch", { target: routedTarget, chars });
       }

@@ -18,7 +18,7 @@ describe("normalizeTarget", () => {
 function makeDeps(overrides: Partial<SwitchboardDeps> = {}): SwitchboardDeps {
   return {
     submitToPane: vi.fn().mockResolvedValue({ ok: true }),
-    promptBoard: vi.fn().mockResolvedValue({ ok: true }),
+    askBoard: vi.fn().mockResolvedValue({ ok: true, reply: "Done — two files in the workspace." }),
     logDispatch: vi.fn(),
     ...overrides
   };
@@ -29,18 +29,33 @@ describe("routeCommand", () => {
     const deps = makeDeps();
     const result = await routeCommand("codex", "npm test", deps);
     expect(deps.submitToPane).toHaveBeenCalledWith("codex", "npm test");
-    expect(deps.promptBoard).not.toHaveBeenCalled();
+    expect(deps.askBoard).not.toHaveBeenCalled();
     expect(result.target).toBe("codex");
     expect(result.ok).toBe(true);
     expect(deps.logDispatch).toHaveBeenCalledWith("codex", 8);
   });
 
-  it("routes board commands to the workbench agent, not a pane", async () => {
+  it("routes board commands to the workbench agent and returns its actual reply", async () => {
     const deps = makeDeps();
     const result = await routeCommand("board", "summarize the dropped PDF", deps);
-    expect(deps.promptBoard).toHaveBeenCalledWith("summarize the dropped PDF");
+    expect(deps.askBoard).toHaveBeenCalledWith("summarize the dropped PDF");
     expect(deps.submitToPane).not.toHaveBeenCalled();
     expect(result.ok).toBe(true);
+    expect(result.detail).toBe("Workbench agent replied: Done — two files in the workspace.");
+  });
+
+  it("tells the operator to check back when the board is still working (no reply yet)", async () => {
+    const deps = makeDeps({ askBoard: vi.fn().mockResolvedValue({ ok: true, reply: null }) });
+    const result = await routeCommand("board", "big job", deps);
+    expect(result.ok).toBe(true);
+    expect(result.detail).toContain("still working");
+  });
+
+  it("caps a very long board reply before it reaches the voice model", async () => {
+    const deps = makeDeps({ askBoard: vi.fn().mockResolvedValue({ ok: true, reply: "x".repeat(1000) }) });
+    const result = await routeCommand("board", "dump it", deps);
+    expect(result.detail.length).toBeLessThan(700);
+    expect(result.detail.endsWith("…")).toBe(true);
   });
 
   it("rejects an empty command without dispatching", async () => {

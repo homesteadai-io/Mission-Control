@@ -260,6 +260,32 @@ export async function promptBoard(text: string) {
   return { sessionId: id };
 }
 
+/**
+ * Conversational round-trip for the voice switchboard: send the prompt, then
+ * wait for a NEW completed assistant message and return its text so Charli can
+ * speak the board's actual answer instead of "handed off".
+ */
+export async function askBoard(text: string, timeoutMs = 45_000): Promise<string | null> {
+  const before = await listBoardMessages().catch(() => [] as BoardMessage[]);
+  const beforeIds = new Set(before.filter((m) => m.role === "assistant" && m.completed).map((m) => m.id));
+
+  await promptBoard(text);
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const messages = await listBoardMessages().catch(() => [] as BoardMessage[]);
+    const fresh = messages.filter((m) => m.role === "assistant" && m.completed && !beforeIds.has(m.id));
+    // The final turn may be a tool call with no text part; take the newest
+    // fresh message that actually carries text so the reply is never blank.
+    const withText = fresh.filter((m) => m.text.trim().length > 0);
+    if (withText.length > 0) {
+      return withText[withText.length - 1].text.trim();
+    }
+  }
+  return null;
+}
+
 export async function listBoardMessages(): Promise<BoardMessage[]> {
   if (!sessionId) return [];
   const response = await fetch(`${baseUrl()}/api/session/${sessionId}/message`);
@@ -294,8 +320,11 @@ interface RawMessage {
 
 function extractText(message: RawMessage) {
   if (message.type === "user") return message.text ?? "";
-  return (message.content ?? [])
+  const texts = (message.content ?? [])
     .filter((part) => part.type === "text" && typeof part.text === "string")
-    .map((part) => part.text)
-    .join("\n");
+    .map((part) => part.text as string);
+  // opencode can carry a partial part alongside the final one — drop repeats
+  // (Adam saw the same paragraph twice in one bubble).
+  const deduped = texts.filter((text, index) => text !== texts[index - 1]);
+  return deduped.join("\n");
 }
