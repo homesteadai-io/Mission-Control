@@ -26,6 +26,7 @@ import {
   listBoardPermissions,
   onBoardStatus,
   promptBoard,
+  recordWorkspaceDrop,
   replyBoardPermission,
   resetBoardSession,
   startBoard,
@@ -346,6 +347,8 @@ ipcMain.handle("workspace:import", async (_event, rawName: string, bytes: ArrayB
       throw new Error("Invalid import payload");
     }
     const info = importFile(workspaceDir, rawName, new Uint8Array(bytes));
+    // Let the board agent know on its next turn — drops are invisible to it otherwise.
+    recordWorkspaceDrop(info.name, info.size);
     await appendEvent(projectRoot, {
       type: "desk.workspace_file_added",
       detail: { name: info.name, size: info.size }
