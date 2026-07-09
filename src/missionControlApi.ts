@@ -75,6 +75,11 @@ export interface BoardApi {
   onStatusChanged: (callback: (status: BoardStatus, detail: string | null) => void) => () => void;
 }
 
+export interface ClipboardApi {
+  readText: () => Promise<{ ok: boolean; text?: string }>;
+  writeText: (text: string) => Promise<{ ok: boolean; error?: string }>;
+}
+
 export interface MissionControlApi {
   setWindowMode: (mode: Exclude<CockpitMode, "menu">) => Promise<{ ok: boolean; mode?: string }>;
   voice: {
@@ -83,6 +88,7 @@ export interface MissionControlApi {
     logEvent: (entry: VoiceLogEvent) => Promise<{ ok: boolean; error?: string }>;
   };
   terminal: TerminalApi;
+  clipboard: ClipboardApi;
   workspace: WorkspaceApi;
   board: BoardApi;
 }

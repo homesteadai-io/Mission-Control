@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, shell, session } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, Menu, shell, session } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -265,6 +265,21 @@ ipcMain.handle("pty:resize", (_event, id: string, cols: number, rows: number) =>
 ipcMain.handle("pty:kill", (_event, id: string) => {
   if (!PANE_IDS.has(id)) return { ok: false, error: "Unknown pane id" };
   killPane(id);
+  return { ok: true };
+});
+
+// Clipboard for the terminal panes. The sandboxed renderer can't reliably use
+// navigator.clipboard (permission handler only grants "media"), so terminals
+// read/write through main. Text only — never images or files.
+ipcMain.handle("clipboard:read-text", () => {
+  return { ok: true, text: clipboard.readText() };
+});
+
+ipcMain.handle("clipboard:write-text", (_event, text: string) => {
+  if (typeof text !== "string" || text.length > 1_000_000) {
+    return { ok: false, error: "Invalid clipboard text" };
+  }
+  clipboard.writeText(text);
   return { ok: true };
 });
 

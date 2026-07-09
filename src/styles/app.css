@@ -671,7 +671,10 @@ td {
 .desk-shell {
   display: grid;
   grid-template-rows: auto 1fr;
-  min-height: 100vh;
+  /* Pin to the viewport: a long workbench chat must scroll inside its feed,
+     never stretch the page (which scrolled the whole cockpit off-screen). */
+  height: 100vh;
+  overflow: hidden;
   gap: 10px;
   padding: 10px;
   background:
