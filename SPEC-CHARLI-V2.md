@@ -199,6 +199,17 @@ affect correctness or stated requirements.
 
 **Suite:** typecheck green, 50 vitest tests green, build green.
 
+**Fresh-subagent review (Opus, 2026-07-10):** hard constraints 1–3 verified clean
+(fan-out argv pinned by test; no screen-scrape; zero Flux-repo writes); SendKeys/PS
+injection surface verified sound (base64 delivery, no shell). Findings triaged:
+1. Fresh-install first event swallowed (newly-appearing file seeded at EOF) —
+   **FIXED** (`existedAtStart` set; 2 regression tests in charliSpine.test.ts).
+2. No quit path once cockpit closed — **FIXED** (pet right-click menu: Open
+   cockpit / Quit Charli).
+3. Voice "claude/codex" routes to pty PANES while handoffs type into DESKTOP
+   windows — documented deviation; Adam to rule which destination voice should use.
+4. Boot seed read whole event file — **FIXED** (64KB tail read).
+
 **Deferred (named, not hidden):**
 1. Claude Stop hook live-fire — lands automatically on Adam's next new session.
 2. Real-window (Claude/Codex desktop) handoff click — deliberately not fired

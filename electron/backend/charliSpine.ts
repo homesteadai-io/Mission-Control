@@ -62,8 +62,17 @@ export function parseSpineLines(chunk: string, source: Source): SpineEvent[] {
 export function readLastEvent(source: Source): SpineEvent | null {
   const file = eventsFile(source);
   try {
-    const text = fs.readFileSync(file, "utf8");
-    const events = parseSpineLines(text, source);
+    // Event files are append-only forever; only the tail matters for seeding.
+    const stats = fs.statSync(file);
+    const start = Math.max(0, stats.size - 64 * 1024);
+    const buffer = Buffer.alloc(stats.size - start);
+    const fd = fs.openSync(file, "r");
+    try {
+      fs.readSync(fd, buffer, 0, buffer.length, start);
+    } finally {
+      fs.closeSync(fd);
+    }
+    const events = parseSpineLines(buffer.toString("utf8"), source);
     return events.length > 0 ? events[events.length - 1] : null;
   } catch {
     return null;
@@ -78,6 +87,8 @@ const POLL_MS = 1200;
 let timer: NodeJS.Timeout | null = null;
 const tails = new Map<Source, TailState>();
 const latest = new Map<Source, SpineEvent>();
+/** Sources whose event file already existed when the spine started. */
+const existedAtStart = new Set<Source>();
 let listener: ((event: SpineEvent) => void) | null = null;
 
 function pollOnce() {
@@ -89,12 +100,14 @@ function pollOnce() {
     } catch {
       continue; // file not created yet
     }
-    const state = tails.get(source) ?? { offset: size };
     if (!tails.has(source)) {
-      // First sighting: seed at EOF so history doesn't replay as fresh events.
-      tails.set(source, state);
-      continue;
+      // First sighting. A file that existed at startup seeds at EOF so history
+      // doesn't replay as fresh events; a file that APPEARED after startup
+      // contains only new turns — seed at 0 so the very first turn on a fresh
+      // install is emitted, not swallowed. (Review finding #1, 2026-07-10.)
+      tails.set(source, { offset: existedAtStart.has(source) ? size : 0 });
     }
+    const state = tails.get(source)!;
     if (size < state.offset) state.offset = 0; // truncated/rotated
     if (size === state.offset) continue;
 
@@ -121,10 +134,11 @@ function pollOnce() {
 export function startSpine(onEvent: (event: SpineEvent) => void) {
   listener = onEvent;
   for (const source of SOURCES) {
+    if (fs.existsSync(eventsFile(source))) existedAtStart.add(source);
     const seeded = readLastEvent(source);
     if (seeded) latest.set(source, seeded);
   }
-  // Seed offsets at current EOF before the first poll.
+  // Seed offsets (EOF for pre-existing files) before the interval starts.
   pollOnce();
   timer = setInterval(pollOnce, POLL_MS);
   timer.unref?.();
@@ -135,6 +149,7 @@ export function stopSpine() {
   timer = null;
   listener = null;
   tails.clear();
+  existedAtStart.clear();
 }
 
 /** Latest known turn per source (seeded from file history on boot). */

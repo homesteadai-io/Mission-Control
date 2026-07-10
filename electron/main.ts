@@ -179,6 +179,27 @@ function createPetWindow() {
     petWindow = null;
   });
 
+  // The pet is frameless and skip-taskbar; without this there is no way to
+  // quit once the cockpit window is closed (review finding #2, 2026-07-10).
+  petWindow.webContents.on("context-menu", () => {
+    Menu.buildFromTemplate([
+      {
+        label: "Open cockpit",
+        click: () => {
+          if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          } else {
+            createWindow();
+          }
+        }
+      },
+      { type: "separator" },
+      { label: "Quit Charli", role: "quit" }
+    ]).popup({ window: petWindow ?? undefined });
+  });
+
   // Self-capture for headless visual verification: CHARLI_CAPTURE=1 writes a
   // PNG of the pet window to ~/.charli/pet-capture.png a few seconds after load.
   if (process.env.CHARLI_CAPTURE === "1") {
