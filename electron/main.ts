@@ -592,15 +592,17 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    const target = mainWindow ?? petWindow;
+    if (!target) return;
+    if (target.isMinimized()) target.restore();
+    target.show();
+    target.focus();
   });
 
   app.whenReady().then(() => {
     installSecurityGuards();
-    createWindow();
+    // Charli v2: the PET is the app. The cockpit (tri-pane) no longer opens at
+    // launch — it's reachable from the pet's right-click menu when wanted.
     onBoardStatus((boardStatus, detail) => {
       mainWindow?.webContents.send("board:status-changed", boardStatus, detail ?? null);
     });
@@ -636,5 +638,5 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) createPetWindow();
 });

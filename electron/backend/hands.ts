@@ -29,9 +29,30 @@ const DEFAULT_CONFIG: HandsConfig = {
     notepad: "Notepad" // safe test target
   },
   fluxLauncher: "C:\\Users\\Adam\\OneDrive\\Desktop\\Flux Cowork\\Start-Flux.ps1",
-  handoffDir: "C:\\Users\\Adam\\OneDrive\\Desktop\\Flux Cowork\\Saved Flux Notes",
+  // Empty = resolve Flux's real library (~/Flux or its settings.json dataDir)
+  // at write time, so handoff notes appear as cards INSIDE the Flux app.
+  handoffDir: "",
   petSkin: "tama"
 };
+
+/**
+ * Flux's library root: ~/Flux by default, overridable by Flux's own settings
+ * (~/Flux/.flux/settings.json → dataDir). Read-only peek — Flux's repo and
+ * data are never modified beyond adding notes to a Handoffs folder, which is
+ * exactly how Flux models user folders.
+ */
+export function fluxLibraryDir(): string {
+  const fluxDefault = path.join(os.homedir(), "Flux");
+  try {
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(fluxDefault, ".flux", "settings.json"), "utf8")
+    ) as { dataDir?: string };
+    if (settings.dataDir && typeof settings.dataDir === "string") return settings.dataDir;
+  } catch {
+    // no settings — default library
+  }
+  return fluxDefault;
+}
 
 export function charliConfigPath() {
   return path.join(process.env.CHARLI_DIR || path.join(os.homedir(), ".charli"), "config.json");
@@ -156,27 +177,38 @@ function safeStamp(iso: string) {
 }
 
 /**
- * Persist a turn summary as a handoff note in Flux's notes folder (Handoffs
- * subfolder keeps the root tidy). Returns the note's absolute path.
+ * Persist a turn summary as a handoff note in a "Handoffs" folder inside
+ * Flux's LIBRARY (~/Flux), shaped like a Flux note (frontmatter +
+ * `## Transcript`) so it renders as a real card in the Flux app — not an
+ * invisible file in the export folder. Returns the note's absolute path.
  */
 export function writeHandoffNote(event: SpineEvent): string {
   const config = loadHandsConfig();
-  const dir = path.join(config.handoffDir, "Handoffs");
+  const base = config.handoffDir || fluxLibraryDir();
+  const dir = path.join(base, "Handoffs");
   fs.mkdirSync(dir, { recursive: true });
-  const stamp = safeStamp(event.timestamp || new Date().toISOString());
+  const iso = event.timestamp || new Date().toISOString();
+  const stamp = safeStamp(iso);
   const file = path.join(dir, `Handoff - ${event.source} - ${stamp}.md`);
+  const firstWords = event.message.replace(/\s+/g, " ").trim().slice(0, 60);
   const body = [
-    `# Handoff — ${event.source} turn summary`,
+    "---",
+    `title: "${event.source} turn — ${firstWords.replace(/"/g, "'")}"`,
+    `source: ${event.source}-handoff`,
+    `created: ${iso}`,
+    "---",
+    "",
+    "## Transcript",
+    "",
+    event.message,
+    "",
+    "## Handoff",
     "",
     `- source: ${event.source}`,
     `- thread: ${event.thread_id}`,
     `- turn: ${event.turn_id}`,
     `- cwd: ${event.cwd}`,
-    `- time: ${event.timestamp}`,
-    "",
-    "---",
-    "",
-    event.message,
+    `- time: ${iso}`,
     ""
   ].join("\n");
   fs.writeFileSync(file, body);

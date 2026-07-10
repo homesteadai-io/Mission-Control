@@ -44,18 +44,28 @@ function SourceRow({ source, event, sent, sending, onFocus, onSend }: SourceRowP
     );
   }
   const fresh = Date.now() - new Date(event.timestamp).getTime() < 30 * 60_000;
+  const preview = event.message.replace(/\s+/g, " ").trim();
   return (
-    <div className={`pet-row${fresh ? " pet-row-fresh" : ""}`}>
-      <button className="pet-source" onClick={onFocus} title={`Focus ${label} — ${event.message.slice(0, 200)}`}>
-        {label}
-      </button>
-      <span className="pet-when">{relativeTime(event.timestamp)}</span>
-      {event.message.trim().length > 0 && !sent && (
-        <button className="pet-send" disabled={sending} onClick={onSend} title={`Send this turn to ${OTHER[source]} for review`}>
-          {sending ? "…" : `→ ${OTHER[source]}`}
+    <div className={`pet-block${fresh ? " pet-row-fresh" : ""}`}>
+      <div className="pet-row">
+        <button className="pet-source" onClick={onFocus} title={`Focus ${label}`}>
+          {label}
         </button>
-      )}
-      {sent && <span className="pet-sent">sent ✓</span>}
+        <span className="pet-when">{relativeTime(event.timestamp)}</span>
+        {preview.length > 0 && !sent && (
+          <button
+            className="pet-send"
+            disabled={sending}
+            onClick={onSend}
+            title={`Sends the note below into ${OTHER[source]}'s window for review`}
+          >
+            {sending ? "…" : `→ ${OTHER[source]}`}
+          </button>
+        )}
+        {sent && <span className="pet-sent">sent ✓</span>}
+      </div>
+      {/* What would actually be handed off — no mystery sends. */}
+      {preview.length > 0 && <div className="pet-preview">{preview}</div>}
     </div>
   );
 }
