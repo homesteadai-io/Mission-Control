@@ -180,13 +180,13 @@ export class MissionVoiceKernel {
   }
 
   /**
-   * Route a command to a coding pane or the board. This is the switchboard core;
-   * the voice tool calls it, and it is directly callable for verification.
+   * Route a command to a coding pane, or surface Flux. This is the switchboard
+   * core; the voice tool calls it, and it is directly callable for verification.
    */
   async routeCommand(target: RouteTarget, text: string): Promise<RouteResult> {
     const result = await routeCommand(target, text, {
       submitToPane: (paneId, line) => this.#api.terminal.submitLine(paneId, line),
-      askBoard: (prompt) => this.#api.board.ask(prompt),
+      surfaceFlux: () => this.#api.charli.focus("flux"),
       logDispatch: (routedTarget, chars) => {
         void this.#logEvent("voice.dispatch", { target: routedTarget, chars });
       }
@@ -197,11 +197,8 @@ export class MissionVoiceKernel {
 
   /** Read an agent's recent output so Charli can report status or a reply. */
   async readAgent(target: RouteTarget): Promise<string> {
-    if (target === "board") {
-      const result = await this.#api.board.messages();
-      if (!result.ok || !result.messages?.length) return "The workbench has no messages yet.";
-      const lastAssistant = [...result.messages].reverse().find((m) => m.role === "assistant" && m.text.trim());
-      return lastAssistant?.text?.slice(-2000) ?? "The workbench agent hasn't replied yet.";
+    if (target === "flux") {
+      return "Flux is a notepad surface — there's nothing to read back from it here.";
     }
     const paneId = target as "claude" | "codex";
     const result = await this.#api.terminal.readRecent(paneId, 2000);
@@ -214,19 +211,19 @@ export class MissionVoiceKernel {
     return tool({
       name: "send_to_agent",
       description:
-        "Route the operator's command to a workstation: 'claude' (Claude Code pane) or 'codex' (Codex pane) types the command into that terminal and runs it; 'board' hands it to the workbench agent. Use this whenever the operator asks to send, tell, or dispatch work to one of the agents.",
+        "Route the operator's command: 'claude' (Claude Code pane) or 'codex' (Codex pane) types the command into that terminal and runs it; 'flux' surfaces the Flux notepad window (no text is sent). Use this whenever the operator asks to send, tell, or dispatch work to one of the agents, or to open/surface Flux.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
           target: {
             type: "string",
-            enum: ["claude", "codex", "board"],
+            enum: ["claude", "codex", "flux"],
             description: "Which workstation to route to."
           },
           text: {
             type: "string",
-            description: "The exact command or request to deliver."
+            description: "The exact command or request to deliver (ignored for flux)."
           }
         },
         required: ["target", "text"],
@@ -234,7 +231,8 @@ export class MissionVoiceKernel {
       },
       execute: async (input: unknown) => {
         const { target: rawTarget, text } = input as { target: string; text: string };
-        const target = normalizeTarget(rawTarget) ?? "board";
+        const target = normalizeTarget(rawTarget);
+        if (!target) return "I don't know that workstation — claude, codex, or flux.";
         const result = await this.routeCommand(target, text);
         return result.detail;
       }
@@ -245,14 +243,14 @@ export class MissionVoiceKernel {
     return tool({
       name: "read_agent",
       description:
-        "Read an agent's most recent output so you can report its status or relay its reply. 'claude' = Claude Code pane, 'codex' = Codex pane, 'board' = the workbench agent. Use this whenever the operator asks what an agent said, its status, whether it's ready, or to check on dispatched work. After sending a command with send_to_agent, wait a moment, then read_agent to see the result.",
+        "Read an agent's most recent output so you can report its status or relay its reply. 'claude' = Claude Code pane, 'codex' = Codex pane. Use this whenever the operator asks what an agent said, its status, whether it's ready, or to check on dispatched work. After sending a command with send_to_agent, wait a moment, then read_agent to see the result.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
           target: {
             type: "string",
-            enum: ["claude", "codex", "board"],
+            enum: ["claude", "codex"],
             description: "Which workstation to read from."
           }
         },
@@ -261,7 +259,7 @@ export class MissionVoiceKernel {
       },
       execute: async (input: unknown) => {
         const { target: rawTarget } = input as { target: string };
-        const target = normalizeTarget(rawTarget) ?? "board";
+        const target = normalizeTarget(rawTarget) ?? "claude";
         return this.readAgent(target);
       }
     });

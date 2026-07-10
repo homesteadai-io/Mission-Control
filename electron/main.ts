@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain, Menu, shell, session } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, Menu, screen, shell, session } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -30,15 +30,28 @@ import {
   recordWorkspaceDrop,
   replyBoardPermission,
   resetBoardSession,
-  startBoard,
   stopBoard
 } from "./backend/opencodeSupervisor.js";
+import { getSpineStatus, startSpine, stopSpine, type SpineEvent } from "./backend/charliSpine.js";
+import {
+  ensureCharliConfig,
+  focusApp,
+  loadHandsConfig,
+  pointerLine,
+  typeIntoApp,
+  writeHandoffNote,
+  type HandsTarget
+} from "./backend/hands.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+let petWindow: BrowserWindow | null = null;
 const projectRoot = process.cwd();
+
+/** Latest handoff-able turn per source: the note is already on disk in Flux. */
+const lastHandoff = new Map<string, { event: SpineEvent; notePath: string }>();
 
 const workspaceDir = path.join(os.homedir(), "MissionControl-Workspace");
 fs.mkdirSync(workspaceDir, { recursive: true });
@@ -130,6 +143,175 @@ function createWindow() {
     void mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 }
+
+function createPetWindow() {
+  const workArea = screen.getPrimaryDisplay().workArea;
+  const width = 170;
+  const height = 230;
+  petWindow = new BrowserWindow({
+    width,
+    height,
+    x: workArea.x + workArea.width - width - 24,
+    y: workArea.y + workArea.height - height - 24,
+    transparent: true,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    title: "Charli",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  // Above everything, including maximized apps — the whole point of the pet.
+  petWindow.setAlwaysOnTop(true, "screen-saver");
+
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+  if (devServerUrl) {
+    void petWindow.loadURL(`${devServerUrl}#pet`);
+  } else {
+    void petWindow.loadFile(path.join(__dirname, "../dist/index.html"), { hash: "pet" });
+  }
+  petWindow.on("closed", () => {
+    petWindow = null;
+  });
+
+  // The pet is frameless and skip-taskbar; without this there is no way to
+  // quit once the cockpit window is closed (review finding #2, 2026-07-10).
+  petWindow.webContents.on("context-menu", () => {
+    Menu.buildFromTemplate([
+      {
+        label: "Open cockpit",
+        click: () => {
+          if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          } else {
+            createWindow();
+          }
+        }
+      },
+      { type: "separator" },
+      { label: "Quit Charli", role: "quit" }
+    ]).popup({ window: petWindow ?? undefined });
+  });
+
+  // Self-capture for headless visual verification: CHARLI_CAPTURE=1 writes a
+  // PNG of the pet window to ~/.charli/pet-capture.png a few seconds after load.
+  if (process.env.CHARLI_CAPTURE === "1") {
+    petWindow.webContents.on("did-finish-load", () => {
+      setTimeout(async () => {
+        try {
+          const image = await petWindow?.webContents.capturePage();
+          if (image) {
+            const outPath = path.join(os.homedir(), ".charli", "pet-capture.png");
+            fs.writeFileSync(outPath, image.toPNG());
+            console.log(`[pet] captured -> ${outPath}`);
+          }
+        } catch (error) {
+          console.log(`[pet] capture failed: ${error instanceof Error ? error.message : error}`);
+        }
+      }, 4_000);
+    });
+  }
+}
+
+function toEventView(event: SpineEvent, notePath?: string) {
+  return {
+    source: event.source,
+    thread_id: event.thread_id,
+    turn_id: event.turn_id,
+    cwd: event.cwd,
+    message: event.message.length > 400 ? `${event.message.slice(0, 400)}…` : event.message,
+    timestamp: event.timestamp,
+    notePath
+  };
+}
+
+function handleSpineEvent(event: SpineEvent) {
+  let notePath: string | undefined;
+  if (event.message.trim()) {
+    try {
+      notePath = writeHandoffNote(event);
+      lastHandoff.set(event.source, { event, notePath });
+    } catch (error) {
+      void appendEvent(projectRoot, {
+        type: "charli.handoff_note_error",
+        detail: { message: error instanceof Error ? error.message : "unknown" }
+      });
+    }
+  }
+  petWindow?.webContents.send("charli:event", toEventView(event, notePath));
+  void appendEvent(projectRoot, {
+    type: "charli.turn_completed",
+    detail: { source: event.source, thread: event.thread_id, chars: event.message.length }
+  });
+}
+
+ipcMain.handle("charli:status", () => {
+  const status = getSpineStatus();
+  return {
+    ok: true,
+    codex: status.codex ? toEventView(status.codex, lastHandoff.get("codex")?.notePath) : null,
+    claude: status.claude ? toEventView(status.claude, lastHandoff.get("claude")?.notePath) : null
+  };
+});
+
+ipcMain.handle("charli:skin", () => {
+  try {
+    const config = loadHandsConfig();
+    const skinName = /^[a-z0-9-]+$/.test(config.petSkin) ? config.petSkin : "tama";
+    const skinDir = path.join(projectRoot, "skins", skinName);
+    const meta = JSON.parse(fs.readFileSync(path.join(skinDir, "skin.json"), "utf8"));
+    const imagePath = path.join(skinDir, String(meta.image));
+    const mime = imagePath.endsWith(".png") ? "image/png" : "image/webp";
+    const imageDataUrl = `data:${mime};base64,${fs.readFileSync(imagePath).toString("base64")}`;
+    return { ok: true, skin: { ...meta, imageDataUrl } };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Skin load failed" };
+  }
+});
+
+ipcMain.handle("charli:focus", async (_event, target: string) => {
+  if (!["claude", "codex", "flux"].includes(target)) {
+    return { ok: false, detail: "Unknown focus target" };
+  }
+  const result = await focusApp(target as HandsTarget);
+  void appendEvent(projectRoot, { type: "charli.focus", detail: { target, ok: result.ok } });
+  return result;
+});
+
+async function sendHandoff(source: "codex" | "claude"): Promise<{ ok: boolean; detail: string }> {
+  let entry = lastHandoff.get(source);
+  if (!entry) {
+    // App may have restarted since the turn landed — write the note now.
+    const status = getSpineStatus()[source];
+    if (status && status.message.trim()) {
+      entry = { event: status, notePath: writeHandoffNote(status) };
+      lastHandoff.set(source, entry);
+    }
+  }
+  if (!entry) return { ok: false, detail: `No ${source} turn to hand off yet` };
+
+  const target: HandsTarget = source === "codex" ? "claude" : "codex";
+  const result = await typeIntoApp(target, pointerLine(entry.notePath, entry.event.source));
+  void appendEvent(projectRoot, {
+    type: "charli.handoff_sent",
+    detail: { source, target, ok: result.ok, note: path.basename(entry.notePath) }
+  });
+  return result;
+}
+
+ipcMain.handle("charli:send-handoff", async (_event, source: string) => {
+  if (source !== "codex" && source !== "claude") {
+    return { ok: false, detail: "Unknown handoff source" };
+  }
+  return sendHandoff(source);
+});
 
 ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   if (!mainWindow) return { ok: false };
@@ -410,33 +592,51 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    const target = mainWindow ?? petWindow;
+    if (!target) return;
+    if (target.isMinimized()) target.restore();
+    target.show();
+    target.focus();
   });
 
   app.whenReady().then(() => {
     installSecurityGuards();
-    createWindow();
+    // Charli v2: the PET is the app. The cockpit (tri-pane) no longer opens at
+    // launch — it's reachable from the pet's right-click menu when wanted.
     onBoardStatus((boardStatus, detail) => {
       mainWindow?.webContents.send("board:status-changed", boardStatus, detail ?? null);
     });
-    startBoard(workspaceDir, projectRoot);
+    // Board agent retired (Charli v2 ruling 2026-07-10): no third brain. The
+    // supervisor module stays for archival reference but is never started.
+    ensureCharliConfig();
+    startSpine(handleSpineEvent);
+    createPetWindow();
+
+    // Headless verification hook: CHARLI_TEST_SEND=codex|claude runs the exact
+    // click-to-send path (same function the pet button invokes) once, 8s in.
+    const testSend = process.env.CHARLI_TEST_SEND;
+    if (testSend === "codex" || testSend === "claude") {
+      setTimeout(async () => {
+        const result = await sendHandoff(testSend);
+        console.log(`[charli] test send ${testSend}: ok=${result.ok} detail=${result.detail}`);
+      }, 8_000);
+    }
   });
 }
 
 app.on("before-quit", () => {
   killAllPanes();
   stopBoard();
+  stopSpine();
 });
 
 app.on("window-all-closed", () => {
   killAllPanes();
   stopBoard();
+  stopSpine();
   if (process.platform !== "darwin") app.quit();
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) createPetWindow();
 });

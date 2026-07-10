@@ -82,6 +82,44 @@ export interface ClipboardApi {
   writeText: (text: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
+export type SpineSource = "codex" | "claude";
+
+export interface SpineEventView {
+  source: SpineSource;
+  thread_id: string;
+  turn_id: string;
+  cwd: string;
+  message: string;
+  timestamp: string;
+  /** Absolute path of the handoff note written for this turn, if any. */
+  notePath?: string;
+}
+
+export interface PetSkin {
+  name: string;
+  displayName: string;
+  cols: number;
+  rows: number;
+  frameWidth: number;
+  frameHeight: number;
+  idleRow: number;
+  idleFrames: number;
+  frameRateMs: number;
+  scale: number;
+  imageDataUrl: string;
+}
+
+export type CharliFocusTarget = "claude" | "codex" | "flux";
+
+export interface CharliApi {
+  status: () => Promise<{ ok: boolean; codex?: SpineEventView | null; claude?: SpineEventView | null }>;
+  skin: () => Promise<{ ok: boolean; skin?: PetSkin; error?: string }>;
+  focus: (target: CharliFocusTarget) => Promise<{ ok: boolean; detail?: string }>;
+  /** Send the latest turn from `source` to the other brain (click-to-send). */
+  sendHandoff: (source: SpineSource) => Promise<{ ok: boolean; detail?: string }>;
+  onEvent: (callback: (event: SpineEventView) => void) => () => void;
+}
+
 export interface MissionControlApi {
   setWindowMode: (mode: Exclude<CockpitMode, "menu">) => Promise<{ ok: boolean; mode?: string }>;
   voice: {
@@ -93,4 +131,5 @@ export interface MissionControlApi {
   clipboard: ClipboardApi;
   workspace: WorkspaceApi;
   board: BoardApi;
+  charli: CharliApi;
 }

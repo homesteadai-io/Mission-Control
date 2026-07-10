@@ -61,5 +61,16 @@ contextBridge.exposeInMainWorld("missionControl", {
   clipboard: {
     readText: () => ipcRenderer.invoke("clipboard:read-text"),
     writeText: (text: string) => ipcRenderer.invoke("clipboard:write-text", text)
+  },
+  charli: {
+    status: () => ipcRenderer.invoke("charli:status"),
+    skin: () => ipcRenderer.invoke("charli:skin"),
+    focus: (target: string) => ipcRenderer.invoke("charli:focus", target),
+    sendHandoff: (source: string) => ipcRenderer.invoke("charli:send-handoff", source),
+    onEvent: (callback: (event: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload);
+      ipcRenderer.on("charli:event", handler);
+      return () => ipcRenderer.removeListener("charli:event", handler);
+    }
   }
 });

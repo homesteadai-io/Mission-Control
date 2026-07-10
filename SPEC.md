@@ -1,5 +1,10 @@
 # SPEC — Mission Control v1 "Operator Desk" (Phase 4)
 
+> **SUPERSEDED 2026-07-10 → see `SPEC-CHARLI-V2.md`.** Charli pivots from tri-pane
+> capsule to always-on-top pet overlay (Tama) + event broker + hands; the opencode
+> board agent is retired (no third brain), Flux becomes the shared workspace.
+> This file stays as the Phase 4 build record and verification ledger.
+
 ## Goal
 
 Turn Mission Control from a voice shell into Adam's daily work surface: three
