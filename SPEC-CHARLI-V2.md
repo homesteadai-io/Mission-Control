@@ -146,3 +146,64 @@ is proven ("zero Flux code changes" holds for this build).
 Every slice hands over a runnable check + evidence (command + output, or screenshot).
 A fresh subagent reviews the final diff against this spec and reports only gaps that
 affect correctness or stated requirements.
+
+## BUILT STATE — 2026-07-10 (branch charli-v2-spine)
+
+**S1 — Event spine ✅ LIVE-PROVEN**
+- `spine/charli-notify.cjs` + `charli-claude-hook.cjs` + `install-spine.cjs`;
+  installed to `~/.charli/bin`, both configs patched with backups in
+  `~/.charli/backups/`. Original notify handler captured to `notify-forward.json`.
+- 7 vitest tests green, incl. the forward-args-unchanged contract.
+- LIVE Codex proof: real `codex exec` turn → normalized event in
+  `~/.charli/events/codex.jsonl` (thread/turn ids, cwd, message="pong") AND
+  adapter.log `forward-exit code=0` — the original codex-computer-use handler ran.
+  (Codex CLI upgraded 0.143.0 → 0.144.1; old CLI predated the account's model list.)
+- Claude proof: hook parsed a real 27MB session transcript and extracted the
+  correct last assistant message. Live registration fires from the next NEW
+  Claude Code session (sessions read hooks at start; the build session predated
+  the install) — check `~/.charli/events/claude.jsonl` after any fresh turn.
+- Broker (`electron/backend/charliSpine.ts`) tails both JSONL files, seeds
+  latest-status from history, handles truncation and partial lines.
+
+**S2 — Pet overlay ✅ VISUAL-PROVEN**
+- Frameless transparent always-on-top ("screen-saver" level) 170x230 window,
+  draggable by grabbing Tama, bottom-right spawn, skip-taskbar.
+- Skin system: `skins/<name>/skin.json` + sheet; active skin from
+  `~/.charli/config.json` `petSkin` — NOT hardcoded (Adam's mood rule). Tama
+  8x11 atlas ships as the default skin; row 0 = 8-frame idle cycle.
+- Self-capture (`CHARLI_CAPTURE=1` → `~/.charli/pet-capture.png`) shows Tama
+  + one bubble with BOTH brains ("Claude 22m / Codex 10m / Flux") — the
+  sentence the Codex pet can't say.
+- Fix ledger: app.css min-width bled into the pet page and pushed content
+  off-viewport; pet.css now hard-resets html/body/#root for the pet window.
+
+**S3 — Hands v1 ✅ END-TO-END-PROVEN (Notepad stand-in)**
+- On turn_completed with text: handoff note written to
+  `Flux Cowork\Saved Flux Notes\Handoffs\Handoff - <source> - <ts>.md`
+  (live-verified within 3s of an appended event).
+- Click-to-send (`CHARLI_TEST_SEND` runs the same function as the pet button):
+  focused the target window (restore-if-minimized via user32), typed the
+  pointer line + Enter via SendKeys (base64-delivered, escaped, no clipboard).
+- UIA readback of the target window's document:
+  `Review "...\Handoffs\Handoff - codex - 2026-07-10 18-31-48.md" - codex turn summary`
+  — exact expected line. Test used Notepad as the window target (config
+  override, restored after) so no live agent session received a surprise
+  prompt while Adam was away. Real-window handoff is one config-free click
+  when he's back.
+
+**S4 — Switchboard retarget ✅**
+- Targets: claude/codex (pty panes as before) + flux (focus/launch via
+  Start-Flux.ps1, restore-if-minimized); board target REMOVED from
+  normalizeTarget, voice tools, and read path. opencode supervisor no longer
+  started (module retained, unrouted). 10 switchboard tests green.
+
+**Suite:** typecheck green, 50 vitest tests green, build green.
+
+**Deferred (named, not hidden):**
+1. Claude Stop hook live-fire — lands automatically on Adam's next new session.
+2. Real-window (Claude/Codex desktop) handoff click — deliberately not fired
+   into live sessions while unattended; the identical code path is proven.
+3. Idle-row animation is row 0 of the atlas; other rows (wave, look-directions)
+   available for state-aware animation later.
+4. Handoff notes accumulate in Flux's Handoffs folder — no rotation (append-only
+   ethos); revisit if volume annoys.

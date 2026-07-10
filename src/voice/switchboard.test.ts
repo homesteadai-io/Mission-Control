@@ -6,8 +6,13 @@ describe("normalizeTarget", () => {
     expect(normalizeTarget("Claude Code")).toBe("claude");
     expect(normalizeTarget("cloud code")).toBe("claude"); // common mis-transcription
     expect(normalizeTarget("CODEX")).toBe("codex");
-    expect(normalizeTarget("the workbench")).toBe("board");
-    expect(normalizeTarget("Charli")).toBe("board");
+    expect(normalizeTarget("Flux")).toBe("flux");
+    expect(normalizeTarget("the notepad")).toBe("flux");
+  });
+
+  it("no longer recognizes the retired board target", () => {
+    expect(normalizeTarget("the workbench")).toBeNull();
+    expect(normalizeTarget("board")).toBeNull();
   });
 
   it("returns null for unknown targets", () => {
@@ -18,7 +23,7 @@ describe("normalizeTarget", () => {
 function makeDeps(overrides: Partial<SwitchboardDeps> = {}): SwitchboardDeps {
   return {
     submitToPane: vi.fn().mockResolvedValue({ ok: true }),
-    askBoard: vi.fn().mockResolvedValue({ ok: true, reply: "Done — two files in the workspace." }),
+    surfaceFlux: vi.fn().mockResolvedValue({ ok: true }),
     logDispatch: vi.fn(),
     ...overrides
   };
@@ -29,33 +34,27 @@ describe("routeCommand", () => {
     const deps = makeDeps();
     const result = await routeCommand("codex", "npm test", deps);
     expect(deps.submitToPane).toHaveBeenCalledWith("codex", "npm test");
-    expect(deps.askBoard).not.toHaveBeenCalled();
+    expect(deps.surfaceFlux).not.toHaveBeenCalled();
     expect(result.target).toBe("codex");
     expect(result.ok).toBe(true);
     expect(deps.logDispatch).toHaveBeenCalledWith("codex", 8);
   });
 
-  it("routes board commands to the workbench agent and returns its actual reply", async () => {
+  it("surfaces Flux without sending any command text", async () => {
     const deps = makeDeps();
-    const result = await routeCommand("board", "summarize the dropped PDF", deps);
-    expect(deps.askBoard).toHaveBeenCalledWith("summarize the dropped PDF");
+    const result = await routeCommand("flux", "whatever was said", deps);
+    expect(deps.surfaceFlux).toHaveBeenCalledOnce();
     expect(deps.submitToPane).not.toHaveBeenCalled();
-    expect(result.ok).toBe(true);
-    expect(result.detail).toBe("Workbench agent replied: Done — two files in the workspace.");
+    expect(result).toEqual({ target: "flux", ok: true, detail: "Flux is up." });
   });
 
-  it("tells the operator to check back when the board is still working (no reply yet)", async () => {
-    const deps = makeDeps({ askBoard: vi.fn().mockResolvedValue({ ok: true, reply: null }) });
-    const result = await routeCommand("board", "big job", deps);
-    expect(result.ok).toBe(true);
-    expect(result.detail).toContain("still working");
-  });
-
-  it("caps a very long board reply before it reaches the voice model", async () => {
-    const deps = makeDeps({ askBoard: vi.fn().mockResolvedValue({ ok: true, reply: "x".repeat(1000) }) });
-    const result = await routeCommand("board", "dump it", deps);
-    expect(result.detail.length).toBeLessThan(700);
-    expect(result.detail.endsWith("…")).toBe(true);
+  it("reports a Flux surface failure", async () => {
+    const deps = makeDeps({
+      surfaceFlux: vi.fn().mockResolvedValue({ ok: false, detail: "No window matching /Flux/i found" })
+    });
+    const result = await routeCommand("flux", "", deps);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("No window matching");
   });
 
   it("rejects an empty command without dispatching", async () => {
