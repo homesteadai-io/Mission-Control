@@ -109,3 +109,27 @@ the value). Awaiting Adam running `claude setup-token` once.
 - Checks: typecheck 0, build 0, 56/56 tests. Launch capture shows the new
   bubble + Dutch title; mission-state screenshot sequence deferred until the
   setup-token lands (missions can't complete before auth).
+
+## AUTH CLOSED + S4a voice out ✅ (2026-07-12 ~01:54)
+
+- Adam ran `claude setup-token` → `.env.local` `CLAUDE_CODE_OAUTH_TOKEN`.
+  Mission 34a604e9-era 401s ended; PS5.1 BOM bug (Set-Content utf8) had also
+  blanked the sprite — fixed with BOM-free writes. Adam's verdict on S2:
+  "he moves great and doesnt blink". Also fixed: pet-input right-click
+  clipboard; "Homestead Desktop Intake" scheduled task → pythonw.exe
+  (console window kept stealing the screen).
+- **Anthropic API has no TTS** (verified against the claude-api reference) —
+  Adam's ruling: no ElevenLabs yet, save cost until final version. S4a uses
+  the FREE Windows built-in voices via speechSynthesis in the pet renderer.
+- `petSpeech.ts`: pure decide/format logic — debounce (default 3 min),
+  quiet hours (midnight-crossing), attention pings bypass debounce only.
+  10 unit tests. Config block `voice` in `~/.charli/config.json`
+  (enabled/debounceMinutes/quietStart/quietEnd/voiceName/rate).
+- Honesty: every spoken AND suppressed line → missions.jsonl `voice_line`.
+- **Live proof (mission `0d8e430e`, Haiku 4.5, auth_lane max-login):**
+  `hello_v2.md` created append-only; `mission_completed` 05:54:15.877Z →
+  `voice_line spoken:true` 05:54:15.885Z — **8 ms** after the SDK finish
+  event (spec bound: ≤5 s). 66/66 tests green.
+- Remaining S4b: voice INPUT — no free lane exists; the proven Realtime
+  kernel (OpenAI key, ~cents/min) awaits Adam's go. ElevenLabs output stays
+  a drop-in swap behind the same debounce/trace layer.
