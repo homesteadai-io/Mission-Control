@@ -62,6 +62,10 @@ contextBridge.exposeInMainWorld("missionControl", {
     readText: () => ipcRenderer.invoke("clipboard:read-text"),
     writeText: (text: string) => ipcRenderer.invoke("clipboard:write-text", text)
   },
+  petVoice: {
+    config: () => ipcRenderer.invoke("voice:pet-config"),
+    logLine: (detail: Record<string, unknown>) => ipcRenderer.invoke("voice:pet-line", detail)
+  },
   mission: {
     start: (text: string) => ipcRenderer.invoke("mission:start", text),
     onEvent: (callback: (event: unknown) => void) => {

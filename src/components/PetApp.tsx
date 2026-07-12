@@ -4,9 +4,11 @@ import type {
   MissionEventView,
   PetSkin,
   PetState,
+  PetVoiceConfigView,
   SpineEventView,
   SpineSource
 } from "../missionControlApi";
+import { decideSpeech, spokenLineFor, type SpeechReason } from "../voice/petSpeech";
 import "../styles/pet.css";
 
 /**
@@ -111,6 +113,52 @@ export function PetApp() {
 
   const api = window.missionControl?.charli;
   const missionApi = window.missionControl?.mission;
+  const voiceApi = window.missionControl?.petVoice;
+  const voiceConfig = useRef<PetVoiceConfigView | null>(null);
+  const lastSpokenAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!voiceApi) return;
+    void voiceApi.config().then((result) => {
+      if (result.ok && result.voice) voiceConfig.current = result.voice;
+    });
+  }, [voiceApi]);
+
+  /**
+   * Dutch speaks through the Windows built-in voices (free, offline).
+   * Debounce + quiet hours decided by petSpeech; every spoken AND
+   * suppressed line is traced to missions.jsonl. TTS failure never blocks
+   * the bubble — voice is additive.
+   */
+  function speak(reason: SpeechReason, text: string, missionId?: string) {
+    const config = voiceConfig.current;
+    if (!config) return;
+    const now = Date.now();
+    const decision = decideSpeech(config, reason, lastSpokenAt.current, now, new Date());
+    const line = spokenLineFor(reason, text);
+    void voiceApi?.logLine({
+      missionId: missionId ?? null,
+      reason,
+      line,
+      spoken: decision.speak,
+      suppressed: decision.suppressed ?? null
+    });
+    if (!decision.speak) return;
+    lastSpokenAt.current = now;
+    try {
+      const utterance = new SpeechSynthesisUtterance(line);
+      utterance.rate = config.rate || 1.0;
+      if (config.voiceName) {
+        const voice = window.speechSynthesis
+          .getVoices()
+          .find((v) => v.name.toLowerCase().includes(config.voiceName!.toLowerCase()));
+        if (voice) utterance.voice = voice;
+      }
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      console.error(`[pet] speech failed: ${error instanceof Error ? error.message : error}`);
+    }
+  }
 
   /**
    * Enter a state, optionally followed by a timed sequence
@@ -181,10 +229,12 @@ export function PetApp() {
       if (event.kind === "completed") {
         setMissionBusy(false);
         enterState("jumping", [2_500, "review"], [4_500, "idle"]);
+        speak("completed", event.text, event.missionId);
       }
       if (event.kind === "failed") {
         setMissionBusy(false);
         enterState("failed", [5_000, "idle"]);
+        speak("failed", event.text, event.missionId);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

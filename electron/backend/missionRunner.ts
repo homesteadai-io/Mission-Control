@@ -159,6 +159,11 @@ export function missionIsRunning(): boolean {
   return active !== null;
 }
 
+/** Voice honesty: every spoken or suppressed line lands in the same trace. */
+export function traceVoice(detail: Record<string, unknown>): void {
+  trace(typeof detail.missionId === "string" ? detail.missionId : "voice", "voice_line", detail);
+}
+
 export interface MissionAuth {
   /** Long-lived subscription token from `claude setup-token` (.env.local). */
   oauthToken: string | null;

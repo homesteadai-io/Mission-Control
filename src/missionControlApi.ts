@@ -153,6 +153,21 @@ export interface MissionApi {
   onEvent: (callback: (event: MissionEventView) => void) => () => void;
 }
 
+export interface PetVoiceConfigView {
+  enabled: boolean;
+  debounceMinutes: number;
+  quietStart: string | null;
+  quietEnd: string | null;
+  voiceName: string | null;
+  rate: number;
+}
+
+export interface PetVoiceApi {
+  config: () => Promise<{ ok: boolean; voice?: PetVoiceConfigView }>;
+  /** Trace a spoken or suppressed line (honesty ceiling). */
+  logLine: (detail: Record<string, unknown>) => Promise<{ ok: boolean }>;
+}
+
 export interface CharliApi {
   status: () => Promise<{ ok: boolean; codex?: SpineEventView | null; claude?: SpineEventView | null }>;
   skin: () => Promise<{ ok: boolean; skin?: PetSkin; error?: string }>;
@@ -177,4 +192,5 @@ export interface MissionControlApi {
   board: BoardApi;
   charli: CharliApi;
   mission: MissionApi;
+  petVoice: PetVoiceApi;
 }

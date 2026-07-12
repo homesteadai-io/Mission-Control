@@ -33,7 +33,7 @@ import {
   stopBoard
 } from "./backend/opencodeSupervisor.js";
 import { getSpineStatus, startSpine, stopSpine, type SpineEvent } from "./backend/charliSpine.js";
-import { missionIsRunning, runMission, type MissionEventView } from "./backend/missionRunner.js";
+import { missionIsRunning, runMission, traceVoice, type MissionEventView } from "./backend/missionRunner.js";
 import { readOptionalEnvValue } from "./backend/env.js";
 import {
   ensureCharliConfig,
@@ -367,6 +367,17 @@ function startMission(text: string): { ok: boolean; error?: string } {
 }
 
 ipcMain.handle("mission:start", (_event, text: string) => startMission(text));
+
+// Dutch's voice config (Windows built-in TTS — free, offline). Renderer
+// decides when to speak; every spoken/suppressed line is traced below.
+ipcMain.handle("voice:pet-config", () => {
+  return { ok: true, voice: loadHandsConfig().voice };
+});
+
+ipcMain.handle("voice:pet-line", (_event, detail: Record<string, unknown>) => {
+  traceVoice(sanitizeDetail(detail) ?? {});
+  return { ok: true };
+});
 
 ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   if (!mainWindow) return { ok: false };
