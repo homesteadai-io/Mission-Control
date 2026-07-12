@@ -33,6 +33,7 @@ import {
   stopBoard
 } from "./backend/opencodeSupervisor.js";
 import { getSpineStatus, startSpine, stopSpine, type SpineEvent } from "./backend/charliSpine.js";
+import { missionIsRunning, runMission, type MissionEventView } from "./backend/missionRunner.js";
 import {
   ensureCharliConfig,
   focusApp,
@@ -146,8 +147,8 @@ function createWindow() {
 
 function createPetWindow() {
   const workArea = screen.getPrimaryDisplay().workArea;
-  const width = 170;
-  const height = 230;
+  const width = 210;
+  const height = 280;
   petWindow = new BrowserWindow({
     width,
     height,
@@ -203,19 +204,22 @@ function createPetWindow() {
   // Self-capture for headless visual verification: CHARLI_CAPTURE=1 writes a
   // PNG of the pet window to ~/.charli/pet-capture.png a few seconds after load.
   if (process.env.CHARLI_CAPTURE === "1") {
-    petWindow.webContents.on("did-finish-load", () => {
-      setTimeout(async () => {
-        try {
-          const image = await petWindow?.webContents.capturePage();
-          if (image) {
-            const outPath = path.join(os.homedir(), ".charli", "pet-capture.png");
-            fs.writeFileSync(outPath, image.toPNG());
-            console.log(`[pet] captured -> ${outPath}`);
-          }
-        } catch (error) {
-          console.log(`[pet] capture failed: ${error instanceof Error ? error.message : error}`);
+    const capture = (fileName: string) => async () => {
+      try {
+        const image = await petWindow?.webContents.capturePage();
+        if (image) {
+          const outPath = path.join(os.homedir(), ".charli", fileName);
+          fs.writeFileSync(outPath, image.toPNG());
+          console.log(`[pet] captured -> ${outPath}`);
         }
-      }, 4_000);
+      } catch (error) {
+        console.log(`[pet] capture failed: ${error instanceof Error ? error.message : error}`);
+      }
+    };
+    petWindow.webContents.on("did-finish-load", () => {
+      setTimeout(capture("pet-capture.png"), 4_000);
+      // Second, late capture so a DUTCH_TEST_MISSION result is visible too.
+      setTimeout(capture("pet-capture-late.png"), 50_000);
     });
   }
 }
@@ -312,6 +316,28 @@ ipcMain.handle("charli:send-handoff", async (_event, source: string) => {
   }
   return sendHandoff(source);
 });
+
+// Dutch v4: missions run in an embedded Agent SDK session in this process.
+// Fire-and-stream — the handler returns as soon as the mission is accepted;
+// progress arrives at the pet via "mission:event" pushes.
+function startMission(text: string): { ok: boolean; error?: string } {
+  if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
+    return { ok: false, error: "Invalid mission text" };
+  }
+  if (missionIsRunning()) {
+    return { ok: false, error: "A mission is already running." };
+  }
+  void runMission(text.trim(), workspaceDir, (event: MissionEventView) => {
+    petWindow?.webContents.send("mission:event", event);
+    void appendEvent(projectRoot, {
+      type: `mission.${event.kind}`,
+      detail: { missionId: event.missionId, authLane: event.authLane ?? null }
+    });
+  });
+  return { ok: true };
+}
+
+ipcMain.handle("mission:start", (_event, text: string) => startMission(text));
 
 ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   if (!mainWindow) return { ok: false };
@@ -620,6 +646,17 @@ if (!app.requestSingleInstanceLock()) {
         const result = await sendHandoff(testSend);
         console.log(`[charli] test send ${testSend}: ok=${result.ok} detail=${result.detail}`);
       }, 8_000);
+    }
+
+    // Headless verification hook: DUTCH_TEST_MISSION="..." runs one mission
+    // through the exact IPC path 6s after ready. Evidence lands in
+    // ~/.charli/events/missions.jsonl regardless of who launched us.
+    const testMission = process.env.DUTCH_TEST_MISSION;
+    if (testMission && testMission.trim()) {
+      setTimeout(() => {
+        const result = startMission(testMission);
+        console.log(`[dutch] test mission accepted=${result.ok} ${result.error ?? ""}`);
+      }, 6_000);
     }
   });
 }

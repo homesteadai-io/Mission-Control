@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { CharliFocusTarget, PetSkin, SpineEventView, SpineSource } from "../missionControlApi";
+import type {
+  CharliFocusTarget,
+  MissionEventView,
+  PetSkin,
+  SpineEventView,
+  SpineSource
+} from "../missionControlApi";
 import "../styles/pet.css";
 
 /**
@@ -79,8 +85,12 @@ export function PetApp() {
   const [sentTurns, setSentTurns] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [missionInput, setMissionInput] = useState("");
+  const [missionBusy, setMissionBusy] = useState(false);
+  const [missionNote, setMissionNote] = useState<MissionEventView | null>(null);
 
   const api = window.missionControl?.charli;
+  const missionApi = window.missionControl?.mission;
 
   useEffect(() => {
     if (!api) return;
@@ -98,6 +108,16 @@ export function PetApp() {
       else setClaudeEvent(event);
     });
   }, [api]);
+
+  useEffect(() => {
+    if (!missionApi) return;
+    return missionApi.onEvent((event) => {
+      setMissionNote(event);
+      if (event.kind === "completed" || event.kind === "failed") {
+        setMissionBusy(false);
+      }
+    });
+  }, [missionApi]);
 
   useEffect(() => {
     if (!skin) return;
@@ -147,9 +167,60 @@ export function PetApp() {
   const wasSent = (source: SpineSource, event: SpineEventView | null) =>
     !!event && sentTurns.has(`${source}:${event.turn_id}:${event.timestamp}`);
 
+  async function launchMission() {
+    const text = missionInput.trim();
+    if (!missionApi || !text || missionBusy) return;
+    setMissionBusy(true);
+    setMissionNote(null);
+    const result = await missionApi.start(text);
+    if (!result.ok) {
+      setMissionBusy(false);
+      showToast(result.error ?? "Mission rejected");
+      return;
+    }
+    setMissionInput("");
+  }
+
+  const missionStatusText = missionNote
+    ? missionNote.kind === "tool_use"
+      ? `using ${missionNote.text}`
+      : missionNote.text
+    : missionBusy
+      ? "starting…"
+      : null;
+
   return (
     <div className="pet-shell">
       <div className="pet-bubble">
+        <div className="pet-mission-row">
+          <input
+            className="pet-mission-input"
+            placeholder="Mission for Dutch…"
+            value={missionInput}
+            disabled={missionBusy}
+            onChange={(event) => setMissionInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void launchMission();
+            }}
+          />
+          <button
+            className="pet-send"
+            disabled={missionBusy || !missionInput.trim()}
+            onClick={() => void launchMission()}
+            title="Run this mission with Dutch's embedded Claude brain"
+          >
+            {missionBusy ? "…" : "Go"}
+          </button>
+        </div>
+        {missionStatusText && (
+          <div
+            className={`pet-mission-note pet-mission-${missionNote?.kind ?? "started"}`}
+            title={missionNote?.authLane === "metered" ? "WARNING: metered API spend" : undefined}
+          >
+            {missionNote?.authLane === "metered" && missionNote.kind === "auth" ? "⚠ " : ""}
+            {missionStatusText}
+          </div>
+        )}
         <SourceRow
           source="claude"
           event={claudeEvent}

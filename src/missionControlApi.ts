@@ -111,6 +111,29 @@ export interface PetSkin {
 
 export type CharliFocusTarget = "claude" | "codex" | "flux";
 
+export type MissionEventKind =
+  | "started"
+  | "auth"
+  | "assistant_text"
+  | "tool_use"
+  | "completed"
+  | "failed";
+
+export interface MissionEventView {
+  missionId: string;
+  kind: MissionEventKind;
+  text: string;
+  timestamp: string;
+  authLane?: "max-login" | "metered" | "unknown";
+  costUsd?: number;
+  numTurns?: number;
+}
+
+export interface MissionApi {
+  start: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  onEvent: (callback: (event: MissionEventView) => void) => () => void;
+}
+
 export interface CharliApi {
   status: () => Promise<{ ok: boolean; codex?: SpineEventView | null; claude?: SpineEventView | null }>;
   skin: () => Promise<{ ok: boolean; skin?: PetSkin; error?: string }>;
@@ -132,4 +155,5 @@ export interface MissionControlApi {
   workspace: WorkspaceApi;
   board: BoardApi;
   charli: CharliApi;
+  mission: MissionApi;
 }
