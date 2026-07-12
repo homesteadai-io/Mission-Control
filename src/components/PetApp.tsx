@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type {
-  CharliFocusTarget,
   MissionEventView,
   PetSkin,
   PetState,
-  PetVoiceConfigView,
-  SpineEventView,
-  SpineSource
+  PetVoiceConfigView
 } from "../missionControlApi";
 import { decideSpeech, spokenLineFor, type SpeechReason } from "../voice/petSpeech";
 import { MissionVoiceKernel, type TranscriptLine } from "../voice/missionVoice";
@@ -14,25 +11,11 @@ import { buildDutchTools } from "../voice/dutchTools";
 import "../styles/pet.css";
 
 /**
- * Dutch v4 — the pet IS the agent surface. Mission input on top, Dutch's
- * animation state driven by real SDK mission events (honesty ceiling: unknown
- * = idle, never faked), ambient ears for external Claude/Codex turns demoted
- * to a slim expandable strip.
+ * Dutch v4 — the pet IS the agent surface. Mission input, his own live state
+ * (honesty ceiling: unknown = idle, never faked), voice, and approval chips.
+ * External Claude/Codex turns still make him wave (honest ambient state) but
+ * are no longer surfaced as a panel — Dutch is a doer, not a router.
  */
-
-function relativeTime(iso: string): string {
-  if (!iso) return "";
-  const ms = Date.now() - new Date(iso).getTime();
-  if (Number.isNaN(ms) || ms < 0) return "";
-  const minutes = Math.floor(ms / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-const OTHER: Record<SpineSource, string> = { codex: "Claude", claude: "Codex" };
 
 const STATE_LABEL: Record<PetState, string> = {
   idle: "",
@@ -46,63 +29,11 @@ const STATE_LABEL: Record<PetState, string> = {
   "run-right": ""
 };
 
-interface SourceRowProps {
-  source: SpineSource;
-  event: SpineEventView | null;
-  sent: boolean;
-  sending: boolean;
-  onFocus: () => void;
-  onSend: () => void;
-}
-
-function SourceRow({ source, event, sent, sending, onFocus, onSend }: SourceRowProps) {
-  const label = source === "codex" ? "Codex" : "Claude";
-  if (!event) {
-    return (
-      <div className="pet-row pet-row-idle">
-        <button className="pet-source" onClick={onFocus} title={`Focus ${label}`}>
-          {label}
-        </button>
-        <span className="pet-quiet">quiet</span>
-      </div>
-    );
-  }
-  const fresh = Date.now() - new Date(event.timestamp).getTime() < 30 * 60_000;
-  const preview = event.message.replace(/\s+/g, " ").trim();
-  return (
-    <div className={`pet-block${fresh ? " pet-row-fresh" : ""}`}>
-      <div className="pet-row">
-        <button className="pet-source" onClick={onFocus} title={`Focus ${label}`}>
-          {label}
-        </button>
-        <span className="pet-when">{relativeTime(event.timestamp)}</span>
-        {preview.length > 0 && !sent && (
-          <button
-            className="pet-send"
-            disabled={sending}
-            onClick={onSend}
-            title={`Sends the note below into ${OTHER[source]}'s window for review`}
-          >
-            {sending ? "…" : `→ ${OTHER[source]}`}
-          </button>
-        )}
-        {sent && <span className="pet-sent">sent ✓</span>}
-      </div>
-      {preview.length > 0 && <div className="pet-preview">{preview}</div>}
-    </div>
-  );
-}
-
 export function PetApp() {
   const [skin, setSkin] = useState<PetSkin | null>(null);
   const [frame, setFrame] = useState(0);
   const [petState, setPetState] = useState<PetState>("idle");
-  const [codexEvent, setCodexEvent] = useState<SpineEventView | null>(null);
-  const [claudeEvent, setClaudeEvent] = useState<SpineEventView | null>(null);
-  const [sending, setSending] = useState<SpineSource | null>(null);
-  const [sentTurns, setSentTurns] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
-  const [earsOpen, setEarsOpen] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -190,16 +121,9 @@ export function PetApp() {
       if (!result.ok) console.error(`[pet] skin load failed: ${result.error}`);
       if (result.ok && result.skin) setSkin(result.skin);
     });
-    void api.status().then((result) => {
-      if (!result.ok) return;
-      if (result.codex) setCodexEvent(result.codex);
-      if (result.claude) setClaudeEvent(result.claude);
-    });
-    return api.onEvent((event) => {
-      if (event.source === "codex") setCodexEvent(event);
-      else setClaudeEvent(event);
-      // Honesty: an external turn only ever waves — mission states belong to
-      // Dutch's own missions. Never interrupt one for ambient noise.
+    return api.onEvent(() => {
+      // Honesty: an external turn Dutch overheard only ever makes him wave —
+      // mission states belong to his own missions. Never interrupt one.
       if (petStateRef.current === "idle") {
         enterState("waving", [2_500, "idle"]);
       }
@@ -341,27 +265,6 @@ export function PetApp() {
     toastTimer.current = setTimeout(() => setToast(null), 4_000);
   }
 
-  async function focus(target: CharliFocusTarget) {
-    const result = await api?.focus(target);
-    if (result && !result.ok) showToast(result.detail ?? "Focus failed");
-  }
-
-  async function send(source: SpineSource, event: SpineEventView | null) {
-    if (!api || !event) return;
-    setSending(source);
-    try {
-      const result = await api.sendHandoff(source);
-      if (result.ok) {
-        setSentTurns((current) => new Set(current).add(`${source}:${event.turn_id}:${event.timestamp}`));
-        showToast(`Handed to ${OTHER[source]}`);
-      } else {
-        showToast(result.detail ?? "Handoff failed");
-      }
-    } finally {
-      setSending(null);
-    }
-  }
-
   async function replyChip(reply: "once" | "mission" | "deny") {
     if (!missionApi || !pendingChip?.requestId) return;
     const result = await missionApi.replyPermission(pendingChip.requestId, reply);
@@ -401,9 +304,6 @@ export function PetApp() {
         }
       : undefined;
 
-  const wasSent = (source: SpineSource, event: SpineEventView | null) =>
-    !!event && sentTurns.has(`${source}:${event.turn_id}:${event.timestamp}`);
-
   const missionStatusText = missionNote
     ? missionNote.kind === "tool_use"
       ? `using ${missionNote.text}`
@@ -413,10 +313,6 @@ export function PetApp() {
       : null;
 
   const stateLabel = STATE_LABEL[petState];
-  const earsSummary = [
-    claudeEvent ? `Claude ${relativeTime(claudeEvent.timestamp)}` : "Claude quiet",
-    codexEvent ? `Codex ${relativeTime(codexEvent.timestamp)}` : "Codex quiet"
-  ].join(" · ");
 
   return (
     <div className="pet-shell">
@@ -484,38 +380,6 @@ export function PetApp() {
               </button>
               <button className="pet-chip pet-chip-deny" onClick={() => void replyChip("deny")}>
                 Deny
-              </button>
-            </div>
-          </div>
-        )}
-        <button
-          className="pet-ears-strip"
-          onClick={() => setEarsOpen((open) => !open)}
-          title="External turns Dutch overheard (Claude Code / Codex sessions)"
-        >
-          <span className="pet-ears-icon">{earsOpen ? "▾" : "▸"}</span> {earsSummary}
-        </button>
-        {earsOpen && (
-          <div className="pet-ears-detail">
-            <SourceRow
-              source="claude"
-              event={claudeEvent}
-              sent={wasSent("claude", claudeEvent)}
-              sending={sending === "claude"}
-              onFocus={() => void focus("claude")}
-              onSend={() => void send("claude", claudeEvent)}
-            />
-            <SourceRow
-              source="codex"
-              event={codexEvent}
-              sent={wasSent("codex", codexEvent)}
-              sending={sending === "codex"}
-              onFocus={() => void focus("codex")}
-              onSend={() => void send("codex", codexEvent)}
-            />
-            <div className="pet-row pet-row-flux">
-              <button className="pet-source" onClick={() => void focus("flux")} title="Surface Flux">
-                Flux
               </button>
             </div>
           </div>
