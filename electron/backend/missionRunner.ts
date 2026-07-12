@@ -188,6 +188,8 @@ export async function runMission(
         // Hermetic brain: no user settings, hooks, or personal MCP servers leak
         // into missions (first live run pulled in user-level MCP tools).
         settingSources: [],
+        // Adam's ruling 2026-07-12: missions ride Haiku 4.5 for now.
+        model: "claude-haiku-4-5-20251001",
         maxTurns: 25,
         disallowedTools: ["Task", "WebFetch", "WebSearch", "TodoWrite"],
         systemPrompt:
