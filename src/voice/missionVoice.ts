@@ -37,9 +37,17 @@ interface MissionVoiceCallbacks {
   onSnapshot: (snapshot: MissionVoiceSnapshot) => void;
 }
 
+export interface MissionVoiceOptions {
+  /** Replace the cockpit's dispatch/read tools (e.g. Dutch's mission tools). */
+  tools?: ReturnType<typeof tool>[];
+  agentName?: string;
+  persona?: "cockpit" | "dutch";
+}
+
 export class MissionVoiceKernel {
   #api: MissionControlApi;
   #callbacks: MissionVoiceCallbacks;
+  #options: MissionVoiceOptions;
   #session: RealtimeSession | null = null;
   #sessionId: string | undefined;
   #alwaysListening = true;
@@ -52,10 +60,21 @@ export class MissionVoiceKernel {
   #systemInjectedTexts = new Set<string>();
   #lines: TranscriptLine[] = [];
 
-  constructor(api: MissionControlApi, callbacks: MissionVoiceCallbacks) {
+  constructor(api: MissionControlApi, callbacks: MissionVoiceCallbacks, options: MissionVoiceOptions = {}) {
     this.#api = api;
     this.#callbacks = callbacks;
+    this.#options = options;
     this.#emitSnapshot();
+  }
+
+  /** Inject a system-note line the agent should react to (e.g. mission done). */
+  notify(text: string) {
+    this.#systemInjectedTexts.add(text);
+    this.#session?.sendMessage(text, { mission_control_origin: "surface_notify" });
+  }
+
+  get connected(): boolean {
+    return Boolean(this.#session);
   }
 
   async connect(stateSummary?: string) {
@@ -67,7 +86,10 @@ export class MissionVoiceKernel {
     this.#emitSnapshot();
 
     try {
-      const minted = await this.#api.voice.createSession({ stateSummary });
+      const minted = await this.#api.voice.createSession({
+        stateSummary,
+        persona: this.#options.persona ?? "cockpit"
+      });
       if (!minted.ok || !minted.clientSecret || !minted.sessionId || !minted.instructions) {
         throw new Error(minted.error ?? "Could not create a realtime voice session");
       }
@@ -75,9 +97,9 @@ export class MissionVoiceKernel {
       this.#sessionId = minted.sessionId;
       const instructions = minted.instructions;
       const agent = new RealtimeAgent({
-        name: "Mission Control",
+        name: this.#options.agentName ?? "Mission Control",
         instructions,
-        tools: [this.#buildDispatchTool(), this.#buildReadAgentTool()]
+        tools: this.#options.tools ?? [this.#buildDispatchTool(), this.#buildReadAgentTool()]
       });
 
       const session = new RealtimeSession(agent, {

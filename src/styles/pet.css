@@ -210,6 +210,48 @@ body:has(.pet-shell),
   gap: 3px;
 }
 
+.pet-mic {
+  margin-left: auto;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 5px;
+  cursor: pointer;
+  filter: grayscale(1) opacity(0.75);
+}
+
+.pet-mic:hover {
+  filter: none;
+}
+
+.pet-mic-live {
+  filter: none;
+  border-color: rgba(126, 226, 168, 0.6);
+  background: rgba(126, 226, 168, 0.12);
+  animation: pet-pulse 2s ease-in-out infinite;
+}
+
+.pet-voice-line {
+  font-size: 10px;
+  line-height: 1.35;
+  max-width: 190px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-style: italic;
+}
+
+.pet-voice-user {
+  color: #8b98a5;
+}
+
+.pet-voice-assistant {
+  color: #b8c4d0;
+}
+
 .pet-mission-row {
   display: flex;
   align-items: center;

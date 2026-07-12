@@ -403,10 +403,11 @@ ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   return { ok: true, mode };
 });
 
-ipcMain.handle("voice:create-session", async (_event, options?: { stateSummary?: string }) => {
+ipcMain.handle("voice:create-session", async (_event, options?: { stateSummary?: string; persona?: string }) => {
   try {
     const minted = await mintRealtimeClientSecret(projectRoot, {
-      stateSummary: typeof options?.stateSummary === "string" ? options.stateSummary : undefined
+      stateSummary: typeof options?.stateSummary === "string" ? options.stateSummary : undefined,
+      persona: options?.persona === "dutch" ? "dutch" : "cockpit"
     });
     return { ok: true, ...minted };
   } catch (error) {

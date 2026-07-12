@@ -9,6 +9,8 @@ import type {
   SpineSource
 } from "../missionControlApi";
 import { decideSpeech, spokenLineFor, type SpeechReason } from "../voice/petSpeech";
+import { MissionVoiceKernel, type TranscriptLine } from "../voice/missionVoice";
+import { buildDutchTools } from "../voice/dutchTools";
 import "../styles/pet.css";
 
 /**
@@ -116,6 +118,11 @@ export function PetApp() {
   const voiceApi = window.missionControl?.petVoice;
   const voiceConfig = useRef<PetVoiceConfigView | null>(null);
   const lastSpokenAt = useRef<number | null>(null);
+  const kernelRef = useRef<MissionVoiceKernel | null>(null);
+  const latestMissionEvent = useRef<MissionEventView | null>(null);
+  const [voiceLive, setVoiceLive] = useState(false);
+  const [voiceConnecting, setVoiceConnecting] = useState(false);
+  const [voiceLine, setVoiceLine] = useState<TranscriptLine | null>(null);
 
   useEffect(() => {
     if (!voiceApi) return;
@@ -223,22 +230,84 @@ export function PetApp() {
     if (!missionApi) return;
     return missionApi.onEvent((event) => {
       setMissionNote(event);
+      latestMissionEvent.current = event;
       if (event.kind === "started" || event.kind === "tool_use" || event.kind === "assistant_text") {
         if (!dragging.current) enterState("running");
       }
       if (event.kind === "completed") {
         setMissionBusy(false);
         enterState("jumping", [2_500, "review"], [4_500, "idle"]);
-        speak("completed", event.text, event.missionId);
+        announce("completed", event.text, event.missionId);
       }
       if (event.kind === "failed") {
         setMissionBusy(false);
         enterState("failed", [5_000, "idle"]);
-        speak("failed", event.text, event.missionId);
+        announce("failed", event.text, event.missionId);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionApi]);
+
+  /**
+   * One announcement path, two mouths: with the realtime session live, the
+   * conversational voice reports the result (and Windows TTS stays quiet so
+   * Dutch never talks over himself); otherwise the free Windows voice speaks.
+   */
+  function announce(reason: "completed" | "failed", text: string, missionId?: string) {
+    if (kernelRef.current?.connected) {
+      kernelRef.current.notify(
+        `System note: the mission just ${reason === "completed" ? "completed" : "failed"} — result: ${text}. ` +
+          "Tell Adam in one short sentence."
+      );
+      void voiceApi?.logLine({
+        missionId: missionId ?? null,
+        reason,
+        line: "(announced via realtime voice)",
+        spoken: true,
+        suppressed: null
+      });
+      return;
+    }
+    speak(reason, text, missionId);
+  }
+
+  async function toggleVoice() {
+    if (voiceConnecting) return;
+    if (kernelRef.current?.connected) {
+      await kernelRef.current.disconnect();
+      setVoiceLine(null);
+      return;
+    }
+    const fullApi = window.missionControl;
+    if (!fullApi || !missionApi) return;
+    if (!kernelRef.current) {
+      kernelRef.current = new MissionVoiceKernel(
+        fullApi,
+        {
+          onAvatarState: (state) => {
+            if (state === "speaking" && petStateRef.current === "idle") {
+              enterState("waving");
+            } else if ((state === "listening" || state === "idle") && petStateRef.current === "waving") {
+              enterState("idle");
+            }
+          },
+          onTranscript: (line) => {
+            if (line.role !== "system") setVoiceLine(line);
+          },
+          onSnapshot: (snapshot) => {
+            setVoiceLive(snapshot.connected);
+            setVoiceConnecting(snapshot.connecting);
+          }
+        },
+        {
+          persona: "dutch",
+          agentName: "Dutch",
+          tools: buildDutchTools(missionApi, () => latestMissionEvent.current)
+        }
+      );
+    }
+    await kernelRef.current.connect();
+  }
 
   useEffect(() => {
     if (!skin) return;
@@ -332,7 +401,25 @@ export function PetApp() {
         <div className="pet-title-row">
           <span className="pet-name">Dutch</span>
           {stateLabel && <span className={`pet-state pet-state-${petState}`}>{stateLabel}</span>}
+          <button
+            className={`pet-mic${voiceLive ? " pet-mic-live" : ""}`}
+            disabled={voiceConnecting}
+            onClick={() => void toggleVoice()}
+            title={
+              voiceLive
+                ? "Voice is live — click to hang up"
+                : "Talk to Dutch (OpenAI realtime voice — metered on your OpenAI key)"
+            }
+          >
+            {voiceConnecting ? "…" : voiceLive ? "🎙️" : "🎤"}
+          </button>
         </div>
+        {voiceLine && (
+          <div className={`pet-voice-line pet-voice-${voiceLine.role}`}>
+            {voiceLine.role === "user" ? "you: " : "dutch: "}
+            {voiceLine.text}
+          </div>
+        )}
         <div className="pet-mission-row">
           <input
             className="pet-mission-input"

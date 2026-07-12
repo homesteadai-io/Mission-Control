@@ -2,6 +2,8 @@ import type { CockpitMode, TranscriptEntry } from "./types";
 
 export interface VoiceSessionCreateOptions {
   stateSummary?: string;
+  /** "dutch" = the pet's voice persona; omitted/cockpit = tri-pane cockpit. */
+  persona?: "cockpit" | "dutch";
 }
 
 export interface VoiceSessionCreateResult {
