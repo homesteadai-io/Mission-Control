@@ -134,6 +134,82 @@ body:has(.pet-shell),
   font-weight: 500;
 }
 
+.pet-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pet-name {
+  color: #e6edf3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pet-state {
+  font-size: 10px;
+  color: #8b98a5;
+  font-style: italic;
+}
+
+.pet-state-running {
+  color: #7ec8e2;
+}
+
+.pet-state-waiting {
+  color: #f0c674;
+  animation: pet-pulse 1.2s ease-in-out infinite;
+}
+
+.pet-state-jumping {
+  color: #7ee2a8;
+}
+
+.pet-state-review {
+  color: #9db4ff;
+}
+
+.pet-state-failed {
+  color: #f28b82;
+}
+
+@keyframes pet-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.pet-ears-strip {
+  background: none;
+  border: none;
+  padding: 2px 0 0;
+  margin: 0;
+  text-align: left;
+  font-size: 9px;
+  color: #5c6773;
+  cursor: pointer;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pet-ears-strip:hover {
+  color: #93a1ae;
+}
+
+.pet-ears-icon {
+  font-size: 8px;
+}
+
+.pet-ears-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .pet-mission-row {
   display: flex;
   align-items: center;

@@ -159,9 +159,15 @@ export function missionIsRunning(): boolean {
   return active !== null;
 }
 
+export interface MissionAuth {
+  /** Long-lived subscription token from `claude setup-token` (.env.local). */
+  oauthToken: string | null;
+}
+
 export async function runMission(
   text: string,
   workspaceDir: string,
+  auth: MissionAuth,
   onEvent: (event: MissionEventView) => void
 ): Promise<{ ok: boolean; missionId?: string; error?: string }> {
   if (active) {
@@ -179,12 +185,22 @@ export async function runMission(
 
   let authLane: MissionEventView["authLane"] = "unknown";
 
+  // Deliberately injected AFTER the strip: session-poisoned vars die, the
+  // setup-token subscription credential (if configured) rides in clean.
+  const childEnv = cleanEnv(missionId);
+  if (auth.oauthToken) {
+    childEnv.CLAUDE_CODE_OAUTH_TOKEN = auth.oauthToken;
+  }
+  trace(missionId, "auth_source", {
+    setup_token_configured: Boolean(auth.oauthToken)
+  });
+
   try {
     const session = query({
       prompt: text,
       options: {
         cwd: workspaceDir,
-        env: cleanEnv(missionId),
+        env: childEnv,
         // Hermetic brain: no user settings, hooks, or personal MCP servers leak
         // into missions (first live run pulled in user-level MCP tools).
         settingSources: [],

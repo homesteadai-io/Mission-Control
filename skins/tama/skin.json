@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "tama",
   "displayName": "Tama",
   "image": "spritesheet.webp",
@@ -7,7 +7,7 @@
   "frameWidth": 192,
   "frameHeight": 208,
   "idleRow": 0,
-  "idleFrames": 8,
+  "idleFrames": 7,
   "frameRateMs": 150,
   "scale": 0.5
 }

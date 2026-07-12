@@ -3,15 +3,17 @@ import type {
   CharliFocusTarget,
   MissionEventView,
   PetSkin,
+  PetState,
   SpineEventView,
   SpineSource
 } from "../missionControlApi";
 import "../styles/pet.css";
 
 /**
- * Charli's pet overlay — the whole product in one inch. Renders the active
- * skin's idle animation, shows one status note speaking for BOTH brains, and
- * offers click-to-send when a finished turn is ready to hand to the other one.
+ * Dutch v4 — the pet IS the agent surface. Mission input on top, Dutch's
+ * animation state driven by real SDK mission events (honesty ceiling: unknown
+ * = idle, never faked), ambient ears for external Claude/Codex turns demoted
+ * to a slim expandable strip.
  */
 
 function relativeTime(iso: string): string {
@@ -27,6 +29,18 @@ function relativeTime(iso: string): string {
 }
 
 const OTHER: Record<SpineSource, string> = { codex: "Claude", claude: "Codex" };
+
+const STATE_LABEL: Record<PetState, string> = {
+  idle: "",
+  running: "on it…",
+  waiting: "needs you",
+  jumping: "done!",
+  review: "reviewing",
+  failed: "hit a wall",
+  waving: "heard a turn",
+  "run-left": "",
+  "run-right": ""
+};
 
 interface SourceRowProps {
   source: SpineSource;
@@ -70,7 +84,6 @@ function SourceRow({ source, event, sent, sending, onFocus, onSend }: SourceRowP
         )}
         {sent && <span className="pet-sent">sent ✓</span>}
       </div>
-      {/* What would actually be handed off — no mystery sends. */}
       {preview.length > 0 && <div className="pet-preview">{preview}</div>}
     </div>
   );
@@ -79,18 +92,41 @@ function SourceRow({ source, event, sent, sending, onFocus, onSend }: SourceRowP
 export function PetApp() {
   const [skin, setSkin] = useState<PetSkin | null>(null);
   const [frame, setFrame] = useState(0);
+  const [petState, setPetState] = useState<PetState>("idle");
   const [codexEvent, setCodexEvent] = useState<SpineEventView | null>(null);
   const [claudeEvent, setClaudeEvent] = useState<SpineEventView | null>(null);
   const [sending, setSending] = useState<SpineSource | null>(null);
   const [sentTurns, setSentTurns] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
+  const [earsOpen, setEarsOpen] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateBeforeDrag = useRef<PetState>("idle");
+  const dragging = useRef(false);
+  const petStateRef = useRef<PetState>("idle");
   const [missionInput, setMissionInput] = useState("");
   const [missionBusy, setMissionBusy] = useState(false);
   const [missionNote, setMissionNote] = useState<MissionEventView | null>(null);
 
   const api = window.missionControl?.charli;
   const missionApi = window.missionControl?.mission;
+
+  /**
+   * Enter a state, optionally followed by a timed sequence
+   * (e.g. jumping 2.5s → review 4.5s → idle). Any new call cancels the
+   * pending sequence, so a fresh mission always wins over a decaying one.
+   */
+  function enterState(state: PetState, ...sequence: Array<[number, PetState]>) {
+    if (stateTimer.current) clearTimeout(stateTimer.current);
+    setPetState(state);
+    petStateRef.current = state;
+    setFrame(0);
+    if (sequence.length > 0) {
+      const [[afterMs, next], ...rest] = sequence;
+      stateTimer.current = setTimeout(() => enterState(next, ...rest), afterMs);
+    }
+  }
 
   useEffect(() => {
     if (!api) return;
@@ -106,26 +142,62 @@ export function PetApp() {
     return api.onEvent((event) => {
       if (event.source === "codex") setCodexEvent(event);
       else setClaudeEvent(event);
+      // Honesty: an external turn only ever waves — mission states belong to
+      // Dutch's own missions. Never interrupt one for ambient noise.
+      if (petStateRef.current === "idle") {
+        enterState("waving", [2_500, "idle"]);
+      }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api]);
+
+  useEffect(() => {
+    if (!api) return;
+    return api.onDrag((direction) => {
+      if (!dragging.current) {
+        dragging.current = true;
+        stateBeforeDrag.current = petStateRef.current;
+      }
+      if (stateTimer.current) clearTimeout(stateTimer.current);
+      const runState: PetState = direction === "left" ? "run-left" : "run-right";
+      setPetState(runState);
+      petStateRef.current = runState;
+      if (dragTimer.current) clearTimeout(dragTimer.current);
+      dragTimer.current = setTimeout(() => {
+        dragging.current = false;
+        enterState(stateBeforeDrag.current);
+      }, 500);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
   useEffect(() => {
     if (!missionApi) return;
     return missionApi.onEvent((event) => {
       setMissionNote(event);
-      if (event.kind === "completed" || event.kind === "failed") {
+      if (event.kind === "started" || event.kind === "tool_use" || event.kind === "assistant_text") {
+        if (!dragging.current) enterState("running");
+      }
+      if (event.kind === "completed") {
         setMissionBusy(false);
+        enterState("jumping", [2_500, "review"], [4_500, "idle"]);
+      }
+      if (event.kind === "failed") {
+        setMissionBusy(false);
+        enterState("failed", [5_000, "idle"]);
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionApi]);
 
   useEffect(() => {
     if (!skin) return;
+    const row = activeRow(skin, petState);
     const timer = setInterval(() => {
-      setFrame((current) => (current + 1) % Math.max(1, skin.idleFrames));
+      setFrame((current) => (current + 1) % Math.max(1, row.frames));
     }, skin.frameRateMs);
     return () => clearInterval(timer);
-  }, [skin]);
+  }, [skin, petState]);
 
   function showToast(text: string) {
     setToast(text);
@@ -154,19 +226,6 @@ export function PetApp() {
     }
   }
 
-  const spriteStyle = skin
-    ? {
-        width: skin.frameWidth * skin.scale,
-        height: skin.frameHeight * skin.scale,
-        backgroundImage: `url(${skin.imageDataUrl})`,
-        backgroundSize: `${skin.cols * skin.frameWidth * skin.scale}px ${skin.rows * skin.frameHeight * skin.scale}px`,
-        backgroundPosition: `-${frame * skin.frameWidth * skin.scale}px -${skin.idleRow * skin.frameHeight * skin.scale}px`
-      }
-    : undefined;
-
-  const wasSent = (source: SpineSource, event: SpineEventView | null) =>
-    !!event && sentTurns.has(`${source}:${event.turn_id}:${event.timestamp}`);
-
   async function launchMission() {
     const text = missionInput.trim();
     if (!missionApi || !text || missionBusy) return;
@@ -179,7 +238,29 @@ export function PetApp() {
       return;
     }
     setMissionInput("");
+    enterState("running");
   }
+
+  function activeRow(theSkin: PetSkin, state: PetState): { row: number; frames: number } {
+    const match = theSkin.stateRows?.find((entry) => entry.state === state);
+    if (match) return { row: match.row, frames: match.frames };
+    return { row: theSkin.idleRow, frames: theSkin.idleFrames };
+  }
+
+  const row = skin ? activeRow(skin, petState) : null;
+  const spriteStyle =
+    skin && row
+      ? {
+          width: skin.frameWidth * skin.scale,
+          height: skin.frameHeight * skin.scale,
+          backgroundImage: `url(${skin.imageDataUrl})`,
+          backgroundSize: `${skin.cols * skin.frameWidth * skin.scale}px ${skin.rows * skin.frameHeight * skin.scale}px`,
+          backgroundPosition: `-${(frame % row.frames) * skin.frameWidth * skin.scale}px -${row.row * skin.frameHeight * skin.scale}px`
+        }
+      : undefined;
+
+  const wasSent = (source: SpineSource, event: SpineEventView | null) =>
+    !!event && sentTurns.has(`${source}:${event.turn_id}:${event.timestamp}`);
 
   const missionStatusText = missionNote
     ? missionNote.kind === "tool_use"
@@ -189,9 +270,19 @@ export function PetApp() {
       ? "starting…"
       : null;
 
+  const stateLabel = STATE_LABEL[petState];
+  const earsSummary = [
+    claudeEvent ? `Claude ${relativeTime(claudeEvent.timestamp)}` : "Claude quiet",
+    codexEvent ? `Codex ${relativeTime(codexEvent.timestamp)}` : "Codex quiet"
+  ].join(" · ");
+
   return (
     <div className="pet-shell">
       <div className="pet-bubble">
+        <div className="pet-title-row">
+          <span className="pet-name">Dutch</span>
+          {stateLabel && <span className={`pet-state pet-state-${petState}`}>{stateLabel}</span>}
+        </div>
         <div className="pet-mission-row">
           <input
             className="pet-mission-input"
@@ -221,30 +312,41 @@ export function PetApp() {
             {missionStatusText}
           </div>
         )}
-        <SourceRow
-          source="claude"
-          event={claudeEvent}
-          sent={wasSent("claude", claudeEvent)}
-          sending={sending === "claude"}
-          onFocus={() => void focus("claude")}
-          onSend={() => void send("claude", claudeEvent)}
-        />
-        <SourceRow
-          source="codex"
-          event={codexEvent}
-          sent={wasSent("codex", codexEvent)}
-          sending={sending === "codex"}
-          onFocus={() => void focus("codex")}
-          onSend={() => void send("codex", codexEvent)}
-        />
-        <div className="pet-row pet-row-flux">
-          <button className="pet-source" onClick={() => void focus("flux")} title="Surface Flux">
-            Flux
-          </button>
-        </div>
+        <button
+          className="pet-ears-strip"
+          onClick={() => setEarsOpen((open) => !open)}
+          title="External turns Dutch overheard (Claude Code / Codex sessions)"
+        >
+          <span className="pet-ears-icon">{earsOpen ? "▾" : "▸"}</span> {earsSummary}
+        </button>
+        {earsOpen && (
+          <div className="pet-ears-detail">
+            <SourceRow
+              source="claude"
+              event={claudeEvent}
+              sent={wasSent("claude", claudeEvent)}
+              sending={sending === "claude"}
+              onFocus={() => void focus("claude")}
+              onSend={() => void send("claude", claudeEvent)}
+            />
+            <SourceRow
+              source="codex"
+              event={codexEvent}
+              sent={wasSent("codex", codexEvent)}
+              sending={sending === "codex"}
+              onFocus={() => void focus("codex")}
+              onSend={() => void send("codex", codexEvent)}
+            />
+            <div className="pet-row pet-row-flux">
+              <button className="pet-source" onClick={() => void focus("flux")} title="Surface Flux">
+                Flux
+              </button>
+            </div>
+          </div>
+        )}
         {toast && <div className="pet-toast">{toast}</div>}
       </div>
-      <div className="pet-sprite" style={spriteStyle} title="Charli" />
+      <div className="pet-sprite" style={spriteStyle} title="Dutch" />
     </div>
   );
 }

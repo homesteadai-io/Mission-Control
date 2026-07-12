@@ -34,6 +34,7 @@ import {
 } from "./backend/opencodeSupervisor.js";
 import { getSpineStatus, startSpine, stopSpine, type SpineEvent } from "./backend/charliSpine.js";
 import { missionIsRunning, runMission, type MissionEventView } from "./backend/missionRunner.js";
+import { readOptionalEnvValue } from "./backend/env.js";
 import {
   ensureCharliConfig,
   focusApp,
@@ -159,7 +160,7 @@ function createPetWindow() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
-    title: "Charli",
+    title: "Dutch",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -180,6 +181,19 @@ function createPetWindow() {
     petWindow = null;
   });
 
+  // Drag direction for the run-left/run-right rows: the sprite is a native
+  // drag region so the renderer never sees mouse events — main watches the
+  // window move instead.
+  let lastX = petWindow.getBounds().x;
+  petWindow.on("move", () => {
+    if (!petWindow) return;
+    const x = petWindow.getBounds().x;
+    if (x !== lastX) {
+      petWindow.webContents.send("pet:drag", x > lastX ? "right" : "left");
+      lastX = x;
+    }
+  });
+
   // The pet is frameless and skip-taskbar; without this there is no way to
   // quit once the cockpit window is closed (review finding #2, 2026-07-10).
   petWindow.webContents.on("context-menu", () => {
@@ -197,7 +211,7 @@ function createPetWindow() {
         }
       },
       { type: "separator" },
-      { label: "Quit Charli", role: "quit" }
+      { label: "Quit Dutch", role: "quit" }
     ]).popup({ window: petWindow ?? undefined });
   });
 
@@ -327,7 +341,8 @@ function startMission(text: string): { ok: boolean; error?: string } {
   if (missionIsRunning()) {
     return { ok: false, error: "A mission is already running." };
   }
-  void runMission(text.trim(), workspaceDir, (event: MissionEventView) => {
+  const auth = { oauthToken: readOptionalEnvValue(projectRoot, "CLAUDE_CODE_OAUTH_TOKEN") };
+  void runMission(text.trim(), workspaceDir, auth, (event: MissionEventView) => {
     petWindow?.webContents.send("mission:event", event);
     void appendEvent(projectRoot, {
       type: `mission.${event.kind}`,

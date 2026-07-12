@@ -95,6 +95,12 @@ export interface SpineEventView {
   notePath?: string;
 }
 
+export interface SkinStateRow {
+  state: string;
+  row: number;
+  frames: number;
+}
+
 export interface PetSkin {
   name: string;
   displayName: string;
@@ -107,7 +113,20 @@ export interface PetSkin {
   frameRateMs: number;
   scale: number;
   imageDataUrl: string;
+  /** Full per-state row map (Dutch v4). Absent on legacy single-row skins. */
+  stateRows?: SkinStateRow[];
 }
+
+export type PetState =
+  | "idle"
+  | "running"
+  | "waiting"
+  | "jumping"
+  | "review"
+  | "failed"
+  | "waving"
+  | "run-left"
+  | "run-right";
 
 export type CharliFocusTarget = "claude" | "codex" | "flux";
 
@@ -141,6 +160,8 @@ export interface CharliApi {
   /** Send the latest turn from `source` to the other brain (click-to-send). */
   sendHandoff: (source: SpineSource) => Promise<{ ok: boolean; detail?: string }>;
   onEvent: (callback: (event: SpineEventView) => void) => () => void;
+  /** Fires while the pet window is being dragged; direction of travel. */
+  onDrag: (callback: (direction: "left" | "right") => void) => () => void;
 }
 
 export interface MissionControlApi {

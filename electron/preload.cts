@@ -79,6 +79,11 @@ contextBridge.exposeInMainWorld("missionControl", {
       const handler = (_event: unknown, payload: unknown) => callback(payload);
       ipcRenderer.on("charli:event", handler);
       return () => ipcRenderer.removeListener("charli:event", handler);
+    },
+    onDrag: (callback: (direction: string) => void) => {
+      const handler = (_event: unknown, direction: string) => callback(direction);
+      ipcRenderer.on("pet:drag", handler);
+      return () => ipcRenderer.removeListener("pet:drag", handler);
     }
   }
 });

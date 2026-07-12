@@ -81,3 +81,31 @@ one normal launch: double-click `scripts/launch-charli.cmd`, type any mission
 (or set `DUTCH_TEST_MISSION`), then read the `sdk_init` + `mission_completed`
 pair in `~/.charli/events/missions.jsonl`. If that run shows
 `auth_lane: "max-login"` + a completed result, S2 may open.
+
+**GATE FIRED (2026-07-12 00:49, Adam's launch):** mission `34a604e9` from
+Adam's own double-click also hit 401 — NOT a sandbox artifact. Root cause
+found: `~/.claude/.credentials.json` holds an OAuth token that **expired
+2026-06-04**; interactive Claude refreshes via newer storage (his pty pane
+authed "Claude Max" fine two minutes later), but the headless CLI the SDK
+spawns reads the stale file. Zero metered spend in any run (`apiKeySource:
+"none"`, cost $0). Fix shipped: `CLAUDE_CODE_OAUTH_TOKEN` from `claude
+setup-token` → `.env.local` → injected into the child env after the strip
+(missionRunner `auth_source` trace line proves configuration without logging
+the value). Awaiting Adam running `claude setup-token` once.
+
+## S2 — Dutch skin + live state machine (2026-07-12)
+
+- `skins/dutch/`: v2 atlas + `skin.json` with `stateRows` (full QA-verified
+  row map, idle **7f** — kills the nonstop blank-frame "blink"; legacy
+  `skins/tama` also fixed 8→7). `~/.charli/config.json` petSkin → `dutch`.
+- Pet state machine in `PetApp.tsx`, honesty-driven: mission events →
+  running / jumping→review→idle / failed→idle; external spine turns only ever
+  wave (never fake mission states); window drag → run-left/right rows (main
+  watches window move — the sprite is a native drag region).
+- Bubble redesign: **Dutch** title + live state word; mission input;
+  Claude/Codex demoted to a slim expandable "ears" strip (handoff buttons
+  intact inside); window/menu renamed Dutch.
+- `DUTCH_IDENTITY.md`: identity contract + naming rulings + row map.
+- Checks: typecheck 0, build 0, 56/56 tests. Launch capture shows the new
+  bubble + Dutch title; mission-state screenshot sequence deferred until the
+  setup-token lands (missions can't complete before auth).
