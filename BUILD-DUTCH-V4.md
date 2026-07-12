@@ -133,3 +133,40 @@ the value). Awaiting Adam running `claude setup-token` once.
 - Remaining S4b: voice INPUT — no free lane exists; the proven Realtime
   kernel (OpenAI key, ~cents/min) awaits Adam's go. ElevenLabs output stays
   a drop-in swap behind the same debounce/trace layer.
+
+## S4b voice-to-voice ✅ (2026-07-12, Adam authorized OpenAI key)
+
+- MissionVoiceKernel (cockpit's proven realtime core) now takes injectable
+  tools/persona/agentName + notify(); cockpit path unchanged. Dutch persona
+  minted server-side; `dutchTools` = run_mission (spoken → embedded brain) +
+  mission_status (reports only real events). Mic button on the bubble; while
+  connected the realtime voice announces results, else Windows TTS.
+- OpenAI Realtime only speaks its own voices (marin) — cloned ElevenLabs
+  can't drive the live conversation (OpenAI constraint), only announcements.
+
+## S3 — Full-screen hands ✅ (2026-07-12 02:35)
+
+- Windows-MCP spawned inside the mission session (`mcp__windows__*`).
+  **Bug found & fixed:** the server sat `status:"pending"` forever because
+  `MODE=default` crashed it on startup (`ValueError: Invalid mode`); the CLI
+  handshake never completed. Root-caused by teeing the CLI↔server wire
+  (server was healthy — responded to a direct initialize+tools/list). Fix:
+  `MODE=local` + full child env merged (Python keeps PATH).
+- Three-tier `classifyTool`: perception (Snapshot/Screenshot/Read/Glob/Grep +
+  workspace writes/shell) AUTO-ALLOW; desktop actions + outside-workspace
+  writes/shell ASK via bubble chips (Allow once / This mission / Deny);
+  Registry + unknown HARD-DENY. Enforced in canUseTool, not just the prompt.
+- **Proof (a) — native app end-to-end, chips approved** (mission feb8456e):
+  App→chip→approved opened Notepad; Type→chip→approved typed "Dutch hands
+  online"; Snapshot auto-allowed to verify; honest report, no save. Notepad
+  confirmed open with the text.
+- **Proof (b) — cross-app perception** (probe): Snapshot read the live
+  foreground app and correctly described Chrome's "Frostbite Flow" board —
+  see-one-app, act-in-another.
+- **Proof (c) — deny blocks execution** (mission 0d6a23b9, DUTCH_TEST_
+  PERMISSION=deny): Snapshot auto-allowed, but App(open Notepad) chip DENIED
+  → Notepad never opened (0 processes), no DENY_PROOF_LEAK file, Dutch
+  reported the denial honestly and ASKED instead of forcing another route.
+- Every request AND decision traced (permission_request / permission_decision
+  with the tier that fired). 67/67 tests green. **All five core organs live:
+  brain · look · voice out · voice in · hands.**
