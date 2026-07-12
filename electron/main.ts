@@ -196,7 +196,21 @@ function createPetWindow() {
 
   // The pet is frameless and skip-taskbar; without this there is no way to
   // quit once the cockpit window is closed (review finding #2, 2026-07-10).
-  petWindow.webContents.on("context-menu", () => {
+  // Right-click on the mission input gets clipboard actions instead — the
+  // pet menu was swallowing every right-click, so paste was unreachable.
+  petWindow.webContents.on("context-menu", (_event, params) => {
+    if (params.isEditable || params.selectionText.trim().length > 0) {
+      const editTemplate: Electron.MenuItemConstructorOptions[] = [];
+      if (params.isEditable) editTemplate.push({ role: "cut", enabled: params.editFlags.canCut });
+      editTemplate.push({ role: "copy", enabled: params.editFlags.canCopy });
+      if (params.isEditable) {
+        editTemplate.push({ role: "paste", enabled: params.editFlags.canPaste });
+        editTemplate.push({ type: "separator" });
+        editTemplate.push({ role: "selectAll" });
+      }
+      Menu.buildFromTemplate(editTemplate).popup({ window: petWindow ?? undefined });
+      return;
+    }
     Menu.buildFromTemplate([
       {
         label: "Open cockpit",
