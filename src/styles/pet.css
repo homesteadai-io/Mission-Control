@@ -252,6 +252,57 @@ body:has(.pet-shell),
   color: #b8c4d0;
 }
 
+.pet-chip-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px;
+  background: rgba(240, 198, 116, 0.08);
+  border: 1px solid rgba(240, 198, 116, 0.4);
+  border-radius: 8px;
+}
+
+.pet-chip-title {
+  font-size: 10px;
+  line-height: 1.35;
+  color: #f0c674;
+  max-width: 190px;
+}
+
+.pet-chip-row {
+  display: flex;
+  gap: 4px;
+}
+
+.pet-chip {
+  flex: 1;
+  border-radius: 6px;
+  font-size: 9px;
+  padding: 3px 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pet-chip-allow {
+  background: rgba(126, 226, 168, 0.14);
+  border: 1px solid rgba(126, 226, 168, 0.45);
+  color: #7ee2a8;
+}
+
+.pet-chip-allow:hover {
+  background: rgba(126, 226, 168, 0.3);
+}
+
+.pet-chip-deny {
+  background: rgba(242, 139, 130, 0.14);
+  border: 1px solid rgba(242, 139, 130, 0.45);
+  color: #f28b82;
+}
+
+.pet-chip-deny:hover {
+  background: rgba(242, 139, 130, 0.3);
+}
+
 .pet-mission-row {
   display: flex;
   align-items: center;

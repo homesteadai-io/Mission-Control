@@ -112,6 +112,7 @@ export function PetApp() {
   const [missionInput, setMissionInput] = useState("");
   const [missionBusy, setMissionBusy] = useState(false);
   const [missionNote, setMissionNote] = useState<MissionEventView | null>(null);
+  const [pendingChip, setPendingChip] = useState<MissionEventView | null>(null);
 
   const api = window.missionControl?.charli;
   const missionApi = window.missionControl?.mission;
@@ -234,13 +235,29 @@ export function PetApp() {
       if (event.kind === "started" || event.kind === "tool_use" || event.kind === "assistant_text") {
         if (!dragging.current) enterState("running");
       }
+      if (event.kind === "permission_request") {
+        setPendingChip(event);
+        enterState("waiting");
+        // One audible ping per waiting episode; bypasses debounce, not quiet hours.
+        if (kernelRef.current?.connected) {
+          kernelRef.current.notify("System note: a permission chip is waiting for Adam. Say 'Dutch needs you' briefly.");
+        } else {
+          speak("attention", "", event.missionId);
+        }
+      }
+      if (event.kind === "permission_resolved") {
+        setPendingChip((current) => (current?.requestId === event.requestId ? null : current));
+        enterState("running");
+      }
       if (event.kind === "completed") {
         setMissionBusy(false);
+        setPendingChip(null);
         enterState("jumping", [2_500, "review"], [4_500, "idle"]);
         announce("completed", event.text, event.missionId);
       }
       if (event.kind === "failed") {
         setMissionBusy(false);
+        setPendingChip(null);
         enterState("failed", [5_000, "idle"]);
         announce("failed", event.text, event.missionId);
       }
@@ -345,6 +362,12 @@ export function PetApp() {
     }
   }
 
+  async function replyChip(reply: "once" | "mission" | "deny") {
+    if (!missionApi || !pendingChip?.requestId) return;
+    const result = await missionApi.replyPermission(pendingChip.requestId, reply);
+    if (!result.ok) showToast(result.error ?? "Reply failed");
+  }
+
   async function launchMission() {
     const text = missionInput.trim();
     if (!missionApi || !text || missionBusy) return;
@@ -440,13 +463,29 @@ export function PetApp() {
             {missionBusy ? "…" : "Go"}
           </button>
         </div>
-        {missionStatusText && (
+        {missionStatusText && !pendingChip && (
           <div
             className={`pet-mission-note pet-mission-${missionNote?.kind ?? "started"}`}
             title={missionNote?.authLane === "metered" ? "WARNING: metered API spend" : undefined}
           >
             {missionNote?.authLane === "metered" && missionNote.kind === "auth" ? "⚠ " : ""}
             {missionStatusText}
+          </div>
+        )}
+        {pendingChip && (
+          <div className="pet-chip-block">
+            <div className="pet-chip-title">{pendingChip.text}</div>
+            <div className="pet-chip-row">
+              <button className="pet-chip pet-chip-allow" onClick={() => void replyChip("once")}>
+                Allow once
+              </button>
+              <button className="pet-chip pet-chip-allow" onClick={() => void replyChip("mission")}>
+                This mission
+              </button>
+              <button className="pet-chip pet-chip-deny" onClick={() => void replyChip("deny")}>
+                Deny
+              </button>
+            </div>
           </div>
         )}
         <button

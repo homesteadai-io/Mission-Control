@@ -33,7 +33,13 @@ import {
   stopBoard
 } from "./backend/opencodeSupervisor.js";
 import { getSpineStatus, startSpine, stopSpine, type SpineEvent } from "./backend/charliSpine.js";
-import { missionIsRunning, runMission, traceVoice, type MissionEventView } from "./backend/missionRunner.js";
+import {
+  missionIsRunning,
+  runMission,
+  traceVoice,
+  type MissionEventView,
+  type PermissionReply
+} from "./backend/missionRunner.js";
 import { readOptionalEnvValue } from "./backend/env.js";
 import {
   ensureCharliConfig,
@@ -347,7 +353,10 @@ ipcMain.handle("charli:send-handoff", async (_event, source: string) => {
 
 // Dutch v4: missions run in an embedded Agent SDK session in this process.
 // Fire-and-stream — the handler returns as soon as the mission is accepted;
-// progress arrives at the pet via "mission:event" pushes.
+// progress arrives at the pet via "mission:event" pushes. Chip-gated actions
+// pause in pendingPermissions until the bubble answers (or S3 test hook).
+const pendingPermissions = new Map<string, (reply: PermissionReply) => void>();
+
 function startMission(text: string): { ok: boolean; error?: string } {
   if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
     return { ok: false, error: "Invalid mission text" };
@@ -356,17 +365,42 @@ function startMission(text: string): { ok: boolean; error?: string } {
     return { ok: false, error: "A mission is already running." };
   }
   const auth = { oauthToken: readOptionalEnvValue(projectRoot, "CLAUDE_CODE_OAUTH_TOKEN") };
-  void runMission(text.trim(), workspaceDir, auth, (event: MissionEventView) => {
-    petWindow?.webContents.send("mission:event", event);
-    void appendEvent(projectRoot, {
-      type: `mission.${event.kind}`,
-      detail: { missionId: event.missionId, authLane: event.authLane ?? null }
-    });
+  void runMission(text.trim(), workspaceDir, auth, {
+    onEvent: (event: MissionEventView) => {
+      petWindow?.webContents.send("mission:event", event);
+      void appendEvent(projectRoot, {
+        type: `mission.${event.kind}`,
+        detail: { missionId: event.missionId, authLane: event.authLane ?? null }
+      });
+    },
+    askPermission: (request) =>
+      new Promise((resolve) => {
+        // Headless deny/allow proof: DUTCH_TEST_PERMISSION answers every chip
+        // through the same resolution path the bubble uses.
+        const testAnswer = process.env.DUTCH_TEST_PERMISSION;
+        if (testAnswer === "deny" || testAnswer === "once" || testAnswer === "mission") {
+          console.log(`[dutch] test permission ${request.tool}: ${testAnswer}`);
+          setTimeout(() => resolve(testAnswer), 500);
+          return;
+        }
+        pendingPermissions.set(request.requestId, resolve);
+      })
   });
   return { ok: true };
 }
 
 ipcMain.handle("mission:start", (_event, text: string) => startMission(text));
+
+ipcMain.handle("mission:permission-reply", (_event, requestId: string, reply: string) => {
+  if (typeof requestId !== "string" || !["once", "mission", "deny"].includes(reply)) {
+    return { ok: false, error: "Invalid permission reply" };
+  }
+  const resolve = pendingPermissions.get(requestId);
+  if (!resolve) return { ok: false, error: "No pending permission with that id" };
+  pendingPermissions.delete(requestId);
+  resolve(reply as PermissionReply);
+  return { ok: true };
+});
 
 // Dutch's voice config (Windows built-in TTS — free, offline). Renderer
 // decides when to speak; every spoken/suppressed line is traced below.

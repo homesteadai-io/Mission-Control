@@ -137,8 +137,12 @@ export type MissionEventKind =
   | "auth"
   | "assistant_text"
   | "tool_use"
+  | "permission_request"
+  | "permission_resolved"
   | "completed"
   | "failed";
+
+export type MissionPermissionReply = "once" | "mission" | "deny";
 
 export interface MissionEventView {
   missionId: string;
@@ -148,10 +152,14 @@ export interface MissionEventView {
   authLane?: "max-login" | "metered" | "unknown";
   costUsd?: number;
   numTurns?: number;
+  requestId?: string;
+  tool?: string;
+  decision?: MissionPermissionReply;
 }
 
 export interface MissionApi {
   start: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  replyPermission: (requestId: string, reply: MissionPermissionReply) => Promise<{ ok: boolean; error?: string }>;
   onEvent: (callback: (event: MissionEventView) => void) => () => void;
 }
 

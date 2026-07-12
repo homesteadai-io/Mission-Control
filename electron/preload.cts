@@ -68,6 +68,8 @@ contextBridge.exposeInMainWorld("missionControl", {
   },
   mission: {
     start: (text: string) => ipcRenderer.invoke("mission:start", text),
+    replyPermission: (requestId: string, reply: string) =>
+      ipcRenderer.invoke("mission:permission-reply", requestId, reply),
     onEvent: (callback: (event: unknown) => void) => {
       const handler = (_event: unknown, payload: unknown) => callback(payload);
       ipcRenderer.on("mission:event", handler);
