@@ -34,6 +34,14 @@ import {
 } from "./backend/opencodeSupervisor.js";
 import { getSpineStatus, startSpine, stopSpine, type SpineEvent } from "./backend/charliSpine.js";
 import {
+  missionIsRunning,
+  runMission,
+  traceVoice,
+  type MissionEventView,
+  type PermissionReply
+} from "./backend/missionRunner.js";
+import { readOptionalEnvValue } from "./backend/env.js";
+import {
   ensureCharliConfig,
   focusApp,
   loadHandsConfig,
@@ -146,8 +154,8 @@ function createWindow() {
 
 function createPetWindow() {
   const workArea = screen.getPrimaryDisplay().workArea;
-  const width = 170;
-  const height = 230;
+  const width = 210;
+  const height = 280;
   petWindow = new BrowserWindow({
     width,
     height,
@@ -158,7 +166,7 @@ function createPetWindow() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
-    title: "Charli",
+    title: "Dutch",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -179,9 +187,36 @@ function createPetWindow() {
     petWindow = null;
   });
 
+  // Drag direction for the run-left/run-right rows: the sprite is a native
+  // drag region so the renderer never sees mouse events — main watches the
+  // window move instead.
+  let lastX = petWindow.getBounds().x;
+  petWindow.on("move", () => {
+    if (!petWindow) return;
+    const x = petWindow.getBounds().x;
+    if (x !== lastX) {
+      petWindow.webContents.send("pet:drag", x > lastX ? "right" : "left");
+      lastX = x;
+    }
+  });
+
   // The pet is frameless and skip-taskbar; without this there is no way to
   // quit once the cockpit window is closed (review finding #2, 2026-07-10).
-  petWindow.webContents.on("context-menu", () => {
+  // Right-click on the mission input gets clipboard actions instead — the
+  // pet menu was swallowing every right-click, so paste was unreachable.
+  petWindow.webContents.on("context-menu", (_event, params) => {
+    if (params.isEditable || params.selectionText.trim().length > 0) {
+      const editTemplate: Electron.MenuItemConstructorOptions[] = [];
+      if (params.isEditable) editTemplate.push({ role: "cut", enabled: params.editFlags.canCut });
+      editTemplate.push({ role: "copy", enabled: params.editFlags.canCopy });
+      if (params.isEditable) {
+        editTemplate.push({ role: "paste", enabled: params.editFlags.canPaste });
+        editTemplate.push({ type: "separator" });
+        editTemplate.push({ role: "selectAll" });
+      }
+      Menu.buildFromTemplate(editTemplate).popup({ window: petWindow ?? undefined });
+      return;
+    }
     Menu.buildFromTemplate([
       {
         label: "Open cockpit",
@@ -196,26 +231,29 @@ function createPetWindow() {
         }
       },
       { type: "separator" },
-      { label: "Quit Charli", role: "quit" }
+      { label: "Quit Dutch", role: "quit" }
     ]).popup({ window: petWindow ?? undefined });
   });
 
   // Self-capture for headless visual verification: CHARLI_CAPTURE=1 writes a
   // PNG of the pet window to ~/.charli/pet-capture.png a few seconds after load.
   if (process.env.CHARLI_CAPTURE === "1") {
-    petWindow.webContents.on("did-finish-load", () => {
-      setTimeout(async () => {
-        try {
-          const image = await petWindow?.webContents.capturePage();
-          if (image) {
-            const outPath = path.join(os.homedir(), ".charli", "pet-capture.png");
-            fs.writeFileSync(outPath, image.toPNG());
-            console.log(`[pet] captured -> ${outPath}`);
-          }
-        } catch (error) {
-          console.log(`[pet] capture failed: ${error instanceof Error ? error.message : error}`);
+    const capture = (fileName: string) => async () => {
+      try {
+        const image = await petWindow?.webContents.capturePage();
+        if (image) {
+          const outPath = path.join(os.homedir(), ".charli", fileName);
+          fs.writeFileSync(outPath, image.toPNG());
+          console.log(`[pet] captured -> ${outPath}`);
         }
-      }, 4_000);
+      } catch (error) {
+        console.log(`[pet] capture failed: ${error instanceof Error ? error.message : error}`);
+      }
+    };
+    petWindow.webContents.on("did-finish-load", () => {
+      setTimeout(capture("pet-capture.png"), 4_000);
+      // Second, late capture so a DUTCH_TEST_MISSION result is visible too.
+      setTimeout(capture("pet-capture-late.png"), 50_000);
     });
   }
 }
@@ -313,6 +351,68 @@ ipcMain.handle("charli:send-handoff", async (_event, source: string) => {
   return sendHandoff(source);
 });
 
+// Dutch v4: missions run in an embedded Agent SDK session in this process.
+// Fire-and-stream — the handler returns as soon as the mission is accepted;
+// progress arrives at the pet via "mission:event" pushes. Chip-gated actions
+// pause in pendingPermissions until the bubble answers (or S3 test hook).
+const pendingPermissions = new Map<string, (reply: PermissionReply) => void>();
+
+function startMission(text: string): { ok: boolean; error?: string } {
+  if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
+    return { ok: false, error: "Invalid mission text" };
+  }
+  if (missionIsRunning()) {
+    return { ok: false, error: "A mission is already running." };
+  }
+  const auth = { oauthToken: readOptionalEnvValue(projectRoot, "CLAUDE_CODE_OAUTH_TOKEN") };
+  void runMission(text.trim(), workspaceDir, auth, {
+    onEvent: (event: MissionEventView) => {
+      petWindow?.webContents.send("mission:event", event);
+      void appendEvent(projectRoot, {
+        type: `mission.${event.kind}`,
+        detail: { missionId: event.missionId, authLane: event.authLane ?? null }
+      });
+    },
+    askPermission: (request) =>
+      new Promise((resolve) => {
+        // Headless deny/allow proof: DUTCH_TEST_PERMISSION answers every chip
+        // through the same resolution path the bubble uses.
+        const testAnswer = process.env.DUTCH_TEST_PERMISSION;
+        if (testAnswer === "deny" || testAnswer === "once" || testAnswer === "mission") {
+          console.log(`[dutch] test permission ${request.tool}: ${testAnswer}`);
+          setTimeout(() => resolve(testAnswer), 500);
+          return;
+        }
+        pendingPermissions.set(request.requestId, resolve);
+      })
+  });
+  return { ok: true };
+}
+
+ipcMain.handle("mission:start", (_event, text: string) => startMission(text));
+
+ipcMain.handle("mission:permission-reply", (_event, requestId: string, reply: string) => {
+  if (typeof requestId !== "string" || !["once", "mission", "deny"].includes(reply)) {
+    return { ok: false, error: "Invalid permission reply" };
+  }
+  const resolve = pendingPermissions.get(requestId);
+  if (!resolve) return { ok: false, error: "No pending permission with that id" };
+  pendingPermissions.delete(requestId);
+  resolve(reply as PermissionReply);
+  return { ok: true };
+});
+
+// Dutch's voice config (Windows built-in TTS — free, offline). Renderer
+// decides when to speak; every spoken/suppressed line is traced below.
+ipcMain.handle("voice:pet-config", () => {
+  return { ok: true, voice: loadHandsConfig().voice };
+});
+
+ipcMain.handle("voice:pet-line", (_event, detail: Record<string, unknown>) => {
+  traceVoice(sanitizeDetail(detail) ?? {});
+  return { ok: true };
+});
+
 ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   if (!mainWindow) return { ok: false };
 
@@ -337,10 +437,11 @@ ipcMain.handle("window:set-mode", (_event, mode: "display" | "computer") => {
   return { ok: true, mode };
 });
 
-ipcMain.handle("voice:create-session", async (_event, options?: { stateSummary?: string }) => {
+ipcMain.handle("voice:create-session", async (_event, options?: { stateSummary?: string; persona?: string }) => {
   try {
     const minted = await mintRealtimeClientSecret(projectRoot, {
-      stateSummary: typeof options?.stateSummary === "string" ? options.stateSummary : undefined
+      stateSummary: typeof options?.stateSummary === "string" ? options.stateSummary : undefined,
+      persona: options?.persona === "dutch" ? "dutch" : "cockpit"
     });
     return { ok: true, ...minted };
   } catch (error) {
@@ -620,6 +721,17 @@ if (!app.requestSingleInstanceLock()) {
         const result = await sendHandoff(testSend);
         console.log(`[charli] test send ${testSend}: ok=${result.ok} detail=${result.detail}`);
       }, 8_000);
+    }
+
+    // Headless verification hook: DUTCH_TEST_MISSION="..." runs one mission
+    // through the exact IPC path 6s after ready. Evidence lands in
+    // ~/.charli/events/missions.jsonl regardless of who launched us.
+    const testMission = process.env.DUTCH_TEST_MISSION;
+    if (testMission && testMission.trim()) {
+      setTimeout(() => {
+        const result = startMission(testMission);
+        console.log(`[dutch] test mission accepted=${result.ok} ${result.error ?? ""}`);
+      }, 6_000);
     }
   });
 }

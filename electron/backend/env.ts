@@ -21,6 +21,24 @@ export function readOpenAiApiKey(projectRoot: string) {
   );
 }
 
+/**
+ * Optional secret from .env.local/.env (process.env fallback). Used for
+ * CLAUDE_CODE_OAUTH_TOKEN — Dutch's headless subscription auth. Main-process
+ * only, never logged, never reaches the renderer.
+ */
+export function readOptionalEnvValue(projectRoot: string, key: string): string | null {
+  const fromProcessEnv = process.env[key]?.trim();
+  if (fromProcessEnv) return fromProcessEnv;
+
+  for (const fileName of ENV_FILES) {
+    const envPath = path.join(projectRoot, fileName);
+    if (!fs.existsSync(envPath)) continue;
+    const value = parseEnv(fs.readFileSync(envPath, "utf8"))[key]?.trim();
+    if (value) return value;
+  }
+  return null;
+}
+
 export function parseEnv(envText: string) {
   const values: Record<string, string> = {};
 

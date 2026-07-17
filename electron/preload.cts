@@ -62,6 +62,20 @@ contextBridge.exposeInMainWorld("missionControl", {
     readText: () => ipcRenderer.invoke("clipboard:read-text"),
     writeText: (text: string) => ipcRenderer.invoke("clipboard:write-text", text)
   },
+  petVoice: {
+    config: () => ipcRenderer.invoke("voice:pet-config"),
+    logLine: (detail: Record<string, unknown>) => ipcRenderer.invoke("voice:pet-line", detail)
+  },
+  mission: {
+    start: (text: string) => ipcRenderer.invoke("mission:start", text),
+    replyPermission: (requestId: string, reply: string) =>
+      ipcRenderer.invoke("mission:permission-reply", requestId, reply),
+    onEvent: (callback: (event: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload);
+      ipcRenderer.on("mission:event", handler);
+      return () => ipcRenderer.removeListener("mission:event", handler);
+    }
+  },
   charli: {
     status: () => ipcRenderer.invoke("charli:status"),
     skin: () => ipcRenderer.invoke("charli:skin"),
@@ -71,6 +85,11 @@ contextBridge.exposeInMainWorld("missionControl", {
       const handler = (_event: unknown, payload: unknown) => callback(payload);
       ipcRenderer.on("charli:event", handler);
       return () => ipcRenderer.removeListener("charli:event", handler);
+    },
+    onDrag: (callback: (direction: string) => void) => {
+      const handler = (_event: unknown, direction: string) => callback(direction);
+      ipcRenderer.on("pet:drag", handler);
+      return () => ipcRenderer.removeListener("pet:drag", handler);
     }
   }
 });

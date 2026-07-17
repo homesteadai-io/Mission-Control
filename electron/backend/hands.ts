@@ -13,12 +13,23 @@ import type { SpineEvent } from "./charliSpine.js";
 
 export type HandsTarget = "claude" | "codex" | "flux" | "notepad";
 
+export interface VoiceSettings {
+  enabled: boolean;
+  debounceMinutes: number;
+  quietStart: string | null;
+  quietEnd: string | null;
+  voiceName: string | null;
+  rate: number;
+}
+
 export interface HandsConfig {
   /** Window-title regex (case-insensitive) per target. */
   windows: Record<string, string>;
   fluxLauncher: string;
   handoffDir: string;
   petSkin: string;
+  /** Dutch's spoken output (Windows built-in voices — free, offline). */
+  voice: VoiceSettings;
 }
 
 const DEFAULT_CONFIG: HandsConfig = {
@@ -32,7 +43,15 @@ const DEFAULT_CONFIG: HandsConfig = {
   // Empty = resolve Flux's real library (~/Flux or its settings.json dataDir)
   // at write time, so handoff notes appear as cards INSIDE the Flux app.
   handoffDir: "",
-  petSkin: "tama"
+  petSkin: "tama",
+  voice: {
+    enabled: true,
+    debounceMinutes: 3,
+    quietStart: null,
+    quietEnd: null,
+    voiceName: null,
+    rate: 1.0
+  }
 };
 
 /**
@@ -64,7 +83,8 @@ export function loadHandsConfig(): HandsConfig {
     return {
       ...DEFAULT_CONFIG,
       ...raw,
-      windows: { ...DEFAULT_CONFIG.windows, ...(raw.windows ?? {}) }
+      windows: { ...DEFAULT_CONFIG.windows, ...(raw.windows ?? {}) },
+      voice: { ...DEFAULT_CONFIG.voice, ...(raw.voice ?? {}) }
     };
   } catch {
     return DEFAULT_CONFIG;

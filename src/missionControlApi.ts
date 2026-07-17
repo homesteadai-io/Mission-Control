@@ -2,6 +2,8 @@ import type { CockpitMode, TranscriptEntry } from "./types";
 
 export interface VoiceSessionCreateOptions {
   stateSummary?: string;
+  /** "dutch" = the pet's voice persona; omitted/cockpit = tri-pane cockpit. */
+  persona?: "cockpit" | "dutch";
 }
 
 export interface VoiceSessionCreateResult {
@@ -95,6 +97,12 @@ export interface SpineEventView {
   notePath?: string;
 }
 
+export interface SkinStateRow {
+  state: string;
+  row: number;
+  frames: number;
+}
+
 export interface PetSkin {
   name: string;
   displayName: string;
@@ -107,9 +115,68 @@ export interface PetSkin {
   frameRateMs: number;
   scale: number;
   imageDataUrl: string;
+  /** Full per-state row map (Dutch v4). Absent on legacy single-row skins. */
+  stateRows?: SkinStateRow[];
 }
 
+export type PetState =
+  | "idle"
+  | "running"
+  | "waiting"
+  | "jumping"
+  | "review"
+  | "failed"
+  | "waving"
+  | "run-left"
+  | "run-right";
+
 export type CharliFocusTarget = "claude" | "codex" | "flux";
+
+export type MissionEventKind =
+  | "started"
+  | "auth"
+  | "assistant_text"
+  | "tool_use"
+  | "permission_request"
+  | "permission_resolved"
+  | "completed"
+  | "failed";
+
+export type MissionPermissionReply = "once" | "mission" | "deny";
+
+export interface MissionEventView {
+  missionId: string;
+  kind: MissionEventKind;
+  text: string;
+  timestamp: string;
+  authLane?: "max-login" | "metered" | "unknown";
+  costUsd?: number;
+  numTurns?: number;
+  requestId?: string;
+  tool?: string;
+  decision?: MissionPermissionReply;
+}
+
+export interface MissionApi {
+  start: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  replyPermission: (requestId: string, reply: MissionPermissionReply) => Promise<{ ok: boolean; error?: string }>;
+  onEvent: (callback: (event: MissionEventView) => void) => () => void;
+}
+
+export interface PetVoiceConfigView {
+  enabled: boolean;
+  debounceMinutes: number;
+  quietStart: string | null;
+  quietEnd: string | null;
+  voiceName: string | null;
+  rate: number;
+}
+
+export interface PetVoiceApi {
+  config: () => Promise<{ ok: boolean; voice?: PetVoiceConfigView }>;
+  /** Trace a spoken or suppressed line (honesty ceiling). */
+  logLine: (detail: Record<string, unknown>) => Promise<{ ok: boolean }>;
+}
 
 export interface CharliApi {
   status: () => Promise<{ ok: boolean; codex?: SpineEventView | null; claude?: SpineEventView | null }>;
@@ -118,6 +185,8 @@ export interface CharliApi {
   /** Send the latest turn from `source` to the other brain (click-to-send). */
   sendHandoff: (source: SpineSource) => Promise<{ ok: boolean; detail?: string }>;
   onEvent: (callback: (event: SpineEventView) => void) => () => void;
+  /** Fires while the pet window is being dragged; direction of travel. */
+  onDrag: (callback: (direction: "left" | "right") => void) => () => void;
 }
 
 export interface MissionControlApi {
@@ -132,4 +201,6 @@ export interface MissionControlApi {
   workspace: WorkspaceApi;
   board: BoardApi;
   charli: CharliApi;
+  mission: MissionApi;
+  petVoice: PetVoiceApi;
 }
